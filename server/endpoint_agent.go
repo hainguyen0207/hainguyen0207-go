@@ -666,14 +666,16 @@ func (s *Server) seedEndpointAgent() {
 	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
 		return
 	}
-	defer func() { _ = s.m.pg.SetSetting(flag, "true") }() // try only once, success or not
-
+	// Already present (seeded earlier or created by hand) → mark done, don't overwrite.
 	if exist, _ := s.m.pg.GetAgentByKey("endpoint-reconstructor"); exist != nil {
-		return // key already taken (the user created it by hand) — don't overwrite
+		_ = s.m.pg.SetSetting(flag, "true")
+		return
 	}
 	a, err := s.m.pg.CreateAgent("endpoint-reconstructor", "Endpoint reconstructor",
 		"Harvests recon/JS endpoints, reconstructs full requests (method+params), replays them safely, and writes rich endpoint assets with an attack-surface appraisal.")
 	if err != nil {
+		// Do NOT set the flag on failure — retry on the next startup instead of
+		// getting stuck "done" with no agent row.
 		log.Printf("[endpoint-recon] failed to create agent: %v", err)
 		return
 	}
@@ -688,5 +690,6 @@ func (s *Server) seedEndpointAgent() {
 	}); err != nil {
 		log.Printf("[endpoint-recon] failed to bind tools: %v", err)
 	}
+	_ = s.m.pg.SetSetting(flag, "true") // mark done only after the agent row exists
 	log.Printf("[endpoint-recon] preset the \"Endpoint reconstructor\" agent + tool bindings")
 }
