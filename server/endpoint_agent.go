@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -51,6 +52,263 @@ func (s *Server) endpointReconTools() []actool.CoreTool {
 }
 
 var endpointReconToolKeys = []string{"sync_recon_assets", "extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset"}
+
+// ---- #3 endpoint URL normalization (dedup variants) ----
+
+var (
+	numSegRe  = regexp.MustCompile(`^\d+$`)
+	uuidSegRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	hexSegRe  = regexp.MustCompile(`^[0-9a-f]{8,}$`)
+)
+
+// normalizeEndpointURL templatizes volatile path segments (numeric ids, uuids, long
+// hashes → {id}/{uuid}/{hash}) and blanks query values (keeping keys), so /user/1?t=a
+// and /user/2?t=b collapse to one inventory endpoint instead of flooding it.
+func normalizeEndpointURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return raw
+	}
+	if u.Path != "" {
+		segs := strings.Split(u.Path, "/")
+		for i, s := range segs {
+			ls := strings.ToLower(s)
+			switch {
+			case numSegRe.MatchString(s):
+				segs[i] = "{id}"
+			case uuidSegRe.MatchString(ls):
+				segs[i] = "{uuid}"
+			case hexSegRe.MatchString(ls):
+				segs[i] = "{hash}"
+			}
+		}
+		u.Path = strings.Join(segs, "/")
+	}
+	if u.RawQuery != "" {
+		keys := make([]string, 0)
+		for k := range u.Query() {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		nq := url.Values{}
+		for _, k := range keys {
+			nq.Set(k, "")
+		}
+		u.RawQuery = nq.Encode()
+	}
+	return u.String()
+}
+
+// ---- #2 deterministic attack-surface appraisal ----
+
+var appraiseSensitivePaths = map[string]int{
+	"admin": 25, "wp-admin": 15, "internal": 20, "debug": 20, "graphql": 20, "actuator": 25,
+	"swagger": 10, "openapi": 10, "api-docs": 10, "upload": 20, ".git": 30, ".env": 25, "backup": 20,
+	"console": 15, "metrics": 10, "config": 15, "phpinfo": 20, "jenkins": 20, "kibana": 15, "grafana": 10,
+	"phpmyadmin": 20, "server-status": 15, "trace": 10, "heapdump": 25,
+}
+var appraiseSuspParams = map[string]string{
+	"id": "idor", "uid": "idor", "user": "idor", "account": "idor", "order": "idor", "doc": "idor",
+	"file": "lfi", "path": "lfi", "dir": "lfi", "template": "ssti", "page": "lfi",
+	"url": "ssrf", "uri": "ssrf", "dest": "ssrf", "callback": "ssrf", "feed": "ssrf", "target": "ssrf",
+	"redirect": "openredirect", "return": "openredirect", "returnurl": "openredirect", "next": "openredirect",
+	"cmd": "rce", "exec": "rce", "command": "rce", "ping": "rce",
+	"q": "injection", "query": "injection", "search": "injection", "filter": "injection", "sort": "injection",
+	"token": "secret", "key": "secret", "apikey": "secret", "password": "secret", "secret": "secret",
+	"role": "privesc", "is_admin": "privesc", "admin": "privesc", "debug": "debug",
+}
+
+// appraiseEndpoint scores an endpoint's value as attack surface (0-100) with tags/hint,
+// deterministically — so every endpoint is appraised even without the LLM agent.
+func appraiseEndpoint(rawURL, method string, params []map[string]any) map[string]any {
+	u, _ := url.Parse(rawURL)
+	path := ""
+	names := map[string]bool{}
+	if u != nil {
+		path = strings.ToLower(u.Path)
+		for k := range u.Query() {
+			names[strings.ToLower(k)] = true
+		}
+	}
+	for _, p := range params {
+		if n, ok := p["name"].(string); ok && n != "" {
+			names[strings.ToLower(n)] = true
+		}
+	}
+	score := 0
+	tagSet := map[string]bool{}
+	add := func(pts int, tag string) {
+		score += pts
+		tagSet[tag] = true
+	}
+	for k, v := range appraiseSensitivePaths {
+		if strings.Contains(path, k) {
+			add(v, "path:"+k)
+		}
+	}
+	for n := range names {
+		if cls, ok := appraiseSuspParams[n]; ok {
+			add(12, cls+":"+n)
+		}
+	}
+	if m := strings.ToUpper(method); m != "" && m != "GET" && m != "HEAD" && m != "OPTIONS" {
+		add(8, "method:"+m)
+	}
+	if score > 100 {
+		score = 100
+	}
+	tags := make([]string, 0, len(tagSet))
+	for t := range tagSet {
+		tags = append(tags, t)
+	}
+	sort.Strings(tags)
+	hint := "low-value"
+	switch {
+	case score >= 60:
+		hint = "high-value: probe auth/IDOR/injection first"
+	case score >= 30:
+		hint = "medium-value: worth testing"
+	}
+	out := map[string]any{"score": score, "hint": hint}
+	if len(tags) > 0 {
+		out["tags"] = tags
+	}
+	return out
+}
+
+// ---- #4 common port → service name (deterministic service labelling) ----
+
+var commonPortService = map[int]string{
+	21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "dns", 110: "pop3", 111: "rpcbind",
+	135: "msrpc", 139: "netbios-ssn", 143: "imap", 161: "snmp", 389: "ldap", 445: "smb",
+	465: "smtps", 587: "smtp", 636: "ldaps", 993: "imaps", 995: "pop3s", 1433: "mssql",
+	1521: "oracle", 1883: "mqtt", 2049: "nfs", 2181: "zookeeper", 2375: "docker", 2376: "docker",
+	3306: "mysql", 3389: "rdp", 5432: "postgres", 5672: "amqp", 5900: "vnc", 5985: "winrm",
+	5986: "winrm", 6379: "redis", 6443: "kubernetes-api", 7001: "weblogic", 8086: "influxdb",
+	9042: "cassandra", 9092: "kafka", 9200: "elasticsearch", 9300: "elasticsearch",
+	10250: "kubelet", 11211: "memcached", 15672: "rabbitmq", 27017: "mongodb",
+}
+
+func portServiceName(port int) string { return commonPortService[port] }
+
+// ---- #1 deterministic JS endpoint extraction (no LLM) ----
+
+// resolveJSEndpoint turns a raw token extracted from JS into an absolute http(s) URL,
+// resolved against the JS file's own URL. Conservative: only accepts clearly
+// path/URL-shaped tokens (leading /, //, ./, ../, or absolute) to avoid promoting
+// mime-types / arbitrary strings the regex also matches.
+func resolveJSEndpoint(base *url.URL, ep string) string {
+	ep = strings.TrimSpace(ep)
+	if len(ep) < 2 {
+		return ""
+	}
+	switch {
+	case strings.HasPrefix(ep, "http://"), strings.HasPrefix(ep, "https://"):
+		return ep
+	case strings.HasPrefix(ep, "//"):
+		sc := "https"
+		if base != nil && base.Scheme != "" {
+			sc = base.Scheme
+		}
+		return sc + ":" + ep
+	case strings.HasPrefix(ep, "/"), strings.HasPrefix(ep, "./"), strings.HasPrefix(ep, "../"):
+		if base == nil {
+			return ""
+		}
+		r, err := base.Parse(ep)
+		if err != nil || (r.Scheme != "http" && r.Scheme != "https") {
+			return ""
+		}
+		return r.String()
+	default:
+		return "" // bare token (mime type, word) — skip to keep the inventory clean
+	}
+}
+
+// syncJSEndpoints deterministically downloads a target's JavaScript files (from the
+// recon url findings) and promotes every endpoint hiding inside them into the asset
+// inventory (source=js), with normalization + appraisal — no LLM involved. Bounded by
+// file + endpoint caps so it stays efficient.
+func (s *Server) syncJSEndpoints(ctx context.Context, as *db.AssetStore, target string) (int, int) {
+	if as == nil {
+		return 0, 0
+	}
+	data, err := reconGetJSON(ctx, fmt.Sprintf("/api/v1/findings?host=%s&kind=url&limit=8000", url.QueryEscape(target)))
+	if err != nil {
+		return 0, 1
+	}
+	var wrap struct {
+		Items []struct {
+			URL *string `json:"url"`
+		} `json:"items"`
+	}
+	_ = json.Unmarshal(data, &wrap)
+	var jsURLs []string
+	seen := map[string]bool{}
+	for _, it := range wrap.Items {
+		if it.URL == nil {
+			continue
+		}
+		u := strings.TrimSpace(*it.URL)
+		base := strings.ToLower(u)
+		if i := strings.IndexAny(base, "?#"); i >= 0 {
+			base = base[:i]
+		}
+		if strings.HasSuffix(base, ".js") && !seen[u] {
+			seen[u] = true
+			jsURLs = append(jsURLs, u)
+			if len(jsURLs) >= 150 { // cap JS files per run
+				break
+			}
+		}
+	}
+	if len(jsURLs) == 0 {
+		return 0, 0
+	}
+	client := replayHTTPClient(10 * time.Second)
+	added, errs := 0, 0
+	for _, ju := range jsURLs {
+		if added >= 4000 { // overall endpoint cap
+			break
+		}
+		req, err := http.NewRequestWithContext(ctx, "GET", ju, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "k1nzr3c0n-endpoint-recon/1.0")
+		resp, err := client.Do(req)
+		if err != nil {
+			errs++
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 3<<20))
+		resp.Body.Close()
+		base, _ := url.Parse(ju)
+		eseen := map[string]bool{}
+		for _, m := range jsEndpointRe.FindAllSubmatch(body, -1) {
+			if len(m) < 2 {
+				continue
+			}
+			abs := resolveJSEndpoint(base, strings.TrimSpace(string(m[1])))
+			if abs == "" {
+				continue
+			}
+			nurl := normalizeEndpointURL(abs)
+			if nurl == "" || eseen[nurl] {
+				continue
+			}
+			eseen[nurl] = true
+			extra := map[string]any{
+				"source": "js", "from_js": ju, "reconstructed": true,
+				"appraisal": appraiseEndpoint(nurl, "GET", nil),
+			}
+			if _, err := as.UpsertEndpoint(db.UpsertEndpointReq{URL: nurl, Method: "GET", Extra: extra}); err == nil {
+				added++
+			}
+		}
+	}
+	return added, errs
+}
 
 // ---- safe HTTP replay client ----
 
@@ -359,11 +617,14 @@ func (s *Server) toolUpsertEndpointAsset() actool.CoreTool {
 			if a.Synthetic != nil {
 				extra["synthetic"] = *a.Synthetic
 			}
+			nurl := normalizeEndpointURL(a.URL) // #3 dedup variants
 			if len(a.Appraisal) > 0 {
 				extra["appraisal"] = a.Appraisal
+			} else {
+				extra["appraisal"] = appraiseEndpoint(nurl, method, a.Params) // #2 deterministic fallback
 			}
 			id, err := as.UpsertEndpoint(db.UpsertEndpointReq{
-				URL:           a.URL,
+				URL:           nurl,
 				Method:        method,
 				Params:        a.Params,
 				IP:            a.IP,
@@ -374,7 +635,7 @@ func (s *Server) toolUpsertEndpointAsset() actool.CoreTool {
 			if err != nil {
 				return actool.Errorf("upsert failed: " + err.Error()), nil
 			}
-			return jsonResult(map[string]any{"ok": true, "id": id, "url": a.URL, "method": method})
+			return jsonResult(map[string]any{"ok": true, "id": id, "url": nurl, "method": method})
 		})
 }
 
@@ -592,15 +853,20 @@ func (s *Server) runReconAssetSync(ctx context.Context, target string, maxScan i
 					} else if net.ParseIP(host) != nil {
 						portIP = host
 					}
+					svc := portServiceName(*it.Port) // #4 label well-known ports
 					switch {
 					case portIP != "":
-						if _, err := as.UpsertIP(db.UpsertIPReq{IP: portIP, OpenPorts: []db.PortService{{Port: *it.Port}}}); err != nil {
+						if _, err := as.UpsertIP(db.UpsertIPReq{IP: portIP, OpenPorts: []db.PortService{{Port: *it.Port, Service: svc}}}); err != nil {
 							noteErr(err)
 						} else {
 							note("port")
 						}
 					case host != "":
-						if _, err := as.UpsertOtherService(db.UpsertOtherServiceReq{Domain: host, Port: *it.Port, ServiceName: fmt.Sprintf("tcp/%d", *it.Port)}); err != nil {
+						svcName := svc
+						if svcName == "" {
+							svcName = fmt.Sprintf("tcp/%d", *it.Port)
+						}
+						if _, err := as.UpsertOtherService(db.UpsertOtherServiceReq{Domain: host, Port: *it.Port, ServiceName: svcName}); err != nil {
 							noteErr(err)
 						} else {
 							note("port")
@@ -631,7 +897,8 @@ func (s *Server) runReconAssetSync(ctx context.Context, target string, maxScan i
 				if it.Kind == "endpoint" {
 					src = "recon"
 				}
-				if _, err := as.UpsertEndpoint(db.UpsertEndpointReq{URL: u, Method: "GET", Extra: map[string]any{"source": src}}); err != nil {
+				nu := normalizeEndpointURL(u) // #3 dedup variants
+				if _, err := as.UpsertEndpoint(db.UpsertEndpointReq{URL: nu, Method: "GET", Extra: map[string]any{"source": src, "appraisal": appraiseEndpoint(nu, "GET", nil)}}); err != nil {
 					noteErr(err)
 				} else {
 					note("endpoint")
@@ -642,7 +909,8 @@ func (s *Server) runReconAssetSync(ctx context.Context, target string, maxScan i
 					continue
 				}
 				params := []map[string]any{{"location": "query", "name": strings.TrimSpace(*it.Name)}}
-				if _, err := as.UpsertEndpoint(db.UpsertEndpointReq{URL: u, Method: "GET", Params: params, Extra: map[string]any{"source": "param-discovery"}}); err != nil {
+				nu := normalizeEndpointURL(u) // #3 dedup variants
+				if _, err := as.UpsertEndpoint(db.UpsertEndpointReq{URL: nu, Method: "GET", Params: params, Extra: map[string]any{"source": "param-discovery", "appraisal": appraiseEndpoint(nu, "GET", params)}}); err != nil {
 					noteErr(err)
 				} else {
 					note("param")
