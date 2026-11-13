@@ -97,7 +97,7 @@ func (s *Server) autoPromoteRunAssets(runID string) {
 	}
 	counts, errs := s.runReconAssetSync(ctx, target, 0)
 	log.Printf("[asset-sync] run %s (%s) promoted to asset inventory: %v (errs=%d)", runID, target, counts, len(errs))
-	// Then kick the intelligent layer: auto-run the endpoint-reconstructor agent on
+	// Then kick the intelligent layer: auto-run the endpoint_recon agent on
 	// this domain (deep JS extraction + request reconstruction + replay + appraisal),
 	// in the background, so it runs per task/per domain without anyone opening a chat.
 	s.maybeLaunchEndpointAgent(target)
@@ -108,7 +108,7 @@ func (s *Server) autoPromoteRunAssets(runID string) {
 // reconstructions. target -> last launch time.
 var endpointReconLaunched sync.Map
 
-// maybeLaunchEndpointAgent fires a background endpoint-reconstructor agent run against
+// maybeLaunchEndpointAgent fires a background endpoint_recon agent run against
 // target, gated by the endpoint_reconstructor setting and throttled per target. The
 // agent's own tools are gated by the same setting, so when it runs they are live.
 func (s *Server) maybeLaunchEndpointAgent(target string) {
@@ -123,13 +123,13 @@ func (s *Server) maybeLaunchEndpointAgent(target string) {
 	}
 	endpointReconLaunched.Store(target, now)
 	s.StartTriggeredRun(
-		"endpoint-reconstructor",
+		"endpoint_recon",
 		"endpoint reconstruction - "+target,
 		"A recon run just finished for "+target+". Automatically reconstruct & appraise all endpoints for this target, ESPECIALLY those in JavaScript, and write them into the asset inventory. "+
 			"Start with sync_recon_assets("+target+"). Then enumerate EVERY live host via recon_assets — all subdomains AND vhost-bound hosts, not just the apex. For EACH host be PORT-AWARE: read its open ports (recon_findings kind=port / recon_graph) and probe it on every open web port (80/443/8080/8443/8000/…), since a vhost only adds a Host header to its IP and may serve only on a non-standard port. On each (host, open port) find .js files and extract_js_endpoints each, reconstruct full requests, replay to observe real status, and upsert_endpoint_asset with full params/status/source/appraisal. Be thorough and professional; work only in scope.",
 		0, false, "", "",
 	)
-	log.Printf("[endpoint-recon] auto-launched endpoint-reconstructor agent for %s", target)
+	log.Printf("[endpoint-recon] auto-launched endpoint_recon agent for %s", target)
 }
 
 const (

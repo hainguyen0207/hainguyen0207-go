@@ -1,7 +1,7 @@
 package server
 
 // Endpoint Reconstructor & Appraiser — a standalone chat-agent persona
-// ("endpoint-reconstructor") that turns the endpoints the recon workflows found
+// ("endpoint_recon") that turns the endpoints the recon workflows found
 // (especially those extracted from JavaScript) into a rich, fully-processed asset
 // inventory: it reconstructs a complete HTTP request (method + query/body/header
 // params) per endpoint, optionally REPLAYS it safely to observe the real response,
@@ -38,7 +38,7 @@ const (
 	settingEndpointReplayWrite   = "endpoint_replay_write"
 )
 
-// endpointReconTools are the two host tools exclusive to the endpoint-reconstructor
+// endpointReconTools are the two host tools exclusive to the endpoint_recon
 // agent (seeded + bound to it only). Added to every agent's base via hostTools, then
 // kept only for its bound agent by ToolResolve.
 func (s *Server) endpointReconTools() []actool.CoreTool {
@@ -667,11 +667,11 @@ func (s *Server) seedEndpointAgent() {
 		return
 	}
 	// Already present (seeded earlier or created by hand) → mark done, don't overwrite.
-	if exist, _ := s.m.pg.GetAgentByKey("endpoint-reconstructor"); exist != nil {
+	if exist, _ := s.m.pg.GetAgentByKey("endpoint_recon"); exist != nil {
 		_ = s.m.pg.SetSetting(flag, "true")
 		return
 	}
-	a, err := s.m.pg.CreateAgent("endpoint-reconstructor", "Endpoint reconstructor",
+	a, err := s.m.pg.CreateAgent("endpoint_recon", "Endpoint reconstructor",
 		"Harvests recon/JS endpoints, reconstructs full requests (method+params), replays them safely, and writes rich endpoint assets with an attack-surface appraisal.")
 	if err != nil {
 		// Do NOT set the flag on failure — retry on the next startup instead of
@@ -684,7 +684,7 @@ func (s *Server) seedEndpointAgent() {
 	}
 	// Bind the endpoint tools + the rich-asset reader (for dedup). The recon_* read
 	// tools are global (no DB row) so they reach every agent without binding.
-	if err := s.m.pg.AddAgentToToolBinding("endpoint-reconstructor", []string{
+	if err := s.m.pg.AddAgentToToolBinding("endpoint_recon", []string{
 		"extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset",
 		"sync_recon_assets", "list_assets",
 	}); err != nil {

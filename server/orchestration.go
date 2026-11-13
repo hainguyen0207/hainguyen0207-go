@@ -44,7 +44,7 @@ func (s *Server) hostTools() ([]actool.CoreTool, map[string][]string) {
 	tools := append(s.m.HostTools(), s.orchestrationTools()...)
 	tools = append(tools, s.findingRetestTools()...)
 	tools = append(tools, s.platformTools()...)      // platform operation tools (create/modify skill/tool/MCP, for Auto)
-	tools = append(tools, s.endpointReconTools()...) // endpoint reconstructor: replay + rich endpoint asset writes (bound to endpoint-reconstructor)
+	tools = append(tools, s.endpointReconTools()...) // endpoint reconstructor: replay + rich endpoint asset writes (bound to endpoint_recon)
 	custom, err := s.customTools()
 	if err != nil {
 		log.Printf("[custom-tool] load failed: %v", err)
@@ -491,8 +491,8 @@ func (s *Server) seedOrchestrationTools() {
 		schema, _ := json.Marshal(t.InputSchema())
 		_ = s.m.PG().SeedTool(t.Name(), t.Description(), schema, autoAgents)
 	}
-	// endpoint-reconstructor tools: bound to that agent only (not auto).
-	endpointAgents := json.RawMessage(`["endpoint-reconstructor"]`)
+	// endpoint_recon tools: bound to that agent only (not auto).
+	endpointAgents := json.RawMessage(`["endpoint_recon"]`)
 	for _, t := range s.endpointReconTools() {
 		schema, _ := json.Marshal(t.InputSchema())
 		_ = s.m.PG().SeedTool(t.Name(), t.Description(), schema, endpointAgents)

@@ -110,7 +110,7 @@ First **accurately extract task_id, the exploration node_id, and the standalone 
 - Use the selected output language throughout. When done (update_finding_report called successfully), finish, stating in one or two sentences which vulnerability you wrote the report for.`
 
 // EndpointReconDefaultPrompt is the seeded prompt for the "endpoint reconstructor"
-// (endpoint-reconstructor) custom agent. It harvests endpoints discovered by the
+// (endpoint_recon) custom agent. It harvests endpoints discovered by the
 // recon workflows — especially those extracted from JavaScript — reconstructs a
 // full HTTP request (method + query/body/header params) for each, optionally
 // replays it safely to observe the real response, then writes a rich endpoint
