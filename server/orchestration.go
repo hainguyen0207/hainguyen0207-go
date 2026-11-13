@@ -512,6 +512,7 @@ func (s *Server) seedOrchestrationTools() {
 	s.reseedWorkerPrompt()            // worker prompt: add an evidence threshold for negative conclusions (one-time)
 	s.seedReporterAgent()             // preset the "report writing" agent + tool bindings + finding trigger (one-time)
 	s.seedEndpointAgent()             // preset the "endpoint reconstructor" agent + tool bindings (one-time)
+	s.seedWorkerEndpointTools()       // bind endpoint JS tools to worker so every worker runs JS recon (one-time)
 	s.upgradeReporterTriggerMessage() // backfill migration for old DBs: make reporter return evidence_version (one-time)
 	s.seedFindingTrafficTools()       // add optional evidence params and read-only evidence tools, preserving user config
 	s.seedFindingWorkflowTools()

@@ -693,3 +693,23 @@ func (s *Server) seedEndpointAgent() {
 	_ = s.m.pg.SetSetting(flag, "true") // mark done only after the agent row exists
 	log.Printf("[endpoint-recon] preset the \"Endpoint reconstructor\" agent + tool bindings")
 }
+
+// seedWorkerEndpointTools binds the endpoint-recon tools to the built-in worker so
+// EVERY pentest worker can run the JS endpoint flow itself (extract/replay/upsert +
+// sync), matching the task template's per-worker JS requirement. The tools are still
+// gated by the endpoint_reconstructor setting at call time. One-time, flag-guarded;
+// a user who later unbinds them is not overridden.
+func (s *Server) seedWorkerEndpointTools() {
+	const flag = "worker_endpoint_tools_v1"
+	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
+		return
+	}
+	if err := s.m.pg.AddAgentToToolBinding("worker", []string{
+		"extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset", "sync_recon_assets",
+	}); err != nil {
+		log.Printf("[endpoint-recon] failed to bind endpoint tools to worker: %v", err)
+		return
+	}
+	_ = s.m.pg.SetSetting(flag, "true")
+	log.Printf("[endpoint-recon] bound endpoint tools to worker (per-worker JS recon)")
+}
