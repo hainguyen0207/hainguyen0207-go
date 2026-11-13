@@ -43,7 +43,8 @@ func jsonResult(v any) (actool.Result, error) {
 func (s *Server) hostTools() ([]actool.CoreTool, map[string][]string) {
 	tools := append(s.m.HostTools(), s.orchestrationTools()...)
 	tools = append(tools, s.findingRetestTools()...)
-	tools = append(tools, s.platformTools()...) // platform operation tools (create/modify skill/tool/MCP, for Auto)
+	tools = append(tools, s.platformTools()...)      // platform operation tools (create/modify skill/tool/MCP, for Auto)
+	tools = append(tools, s.endpointReconTools()...) // endpoint reconstructor: replay + rich endpoint asset writes (bound to endpoint-reconstructor)
 	custom, err := s.customTools()
 	if err != nil {
 		log.Printf("[custom-tool] load failed: %v", err)
@@ -490,6 +491,12 @@ func (s *Server) seedOrchestrationTools() {
 		schema, _ := json.Marshal(t.InputSchema())
 		_ = s.m.PG().SeedTool(t.Name(), t.Description(), schema, autoAgents)
 	}
+	// endpoint-reconstructor tools: bound to that agent only (not auto).
+	endpointAgents := json.RawMessage(`["endpoint-reconstructor"]`)
+	for _, t := range s.endpointReconTools() {
+		schema, _ := json.Marshal(t.InputSchema())
+		_ = s.m.PG().SeedTool(t.Name(), t.Description(), schema, endpointAgents)
+	}
 	s.refreshBuiltinToolSchemas()
 	s.seedAutoDefaultBindings()
 	s.seedPlannerDefaultBindings()
@@ -504,6 +511,7 @@ func (s *Server) seedOrchestrationTools() {
 	s.reseedPlannerPrompt()           // planner prompt: rewrite the "0 intents" justification + add quantitative acceptance checks (one-time)
 	s.reseedWorkerPrompt()            // worker prompt: add an evidence threshold for negative conclusions (one-time)
 	s.seedReporterAgent()             // preset the "report writing" agent + tool bindings + finding trigger (one-time)
+	s.seedEndpointAgent()             // preset the "endpoint reconstructor" agent + tool bindings (one-time)
 	s.upgradeReporterTriggerMessage() // backfill migration for old DBs: make reporter return evidence_version (one-time)
 	s.seedFindingTrafficTools()       // add optional evidence params and read-only evidence tools, preserving user config
 	s.seedFindingWorkflowTools()
@@ -523,6 +531,7 @@ func (s *Server) refreshBuiltinToolSchemas() {
 		return
 	}
 	tools := append(s.orchestrationTools(), s.platformTools()...)
+	tools = append(tools, s.endpointReconTools()...)
 	for _, t := range tools {
 		schema, _ := json.Marshal(t.InputSchema())
 		if err := s.m.pg.RefreshToolDefaults(t.Name(), t.Description(), schema); err != nil {

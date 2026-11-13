@@ -300,11 +300,51 @@ steps:
     outputs:
       naabu_jsonl: '{workspace}/naabu.jsonl'
       web_ips: '{workspace}/web_ips.txt'
+  - id: vhost_probe
+    name: 'probe each discovered vhost across its IP open web ports (Host header via --resolve) -> per-(vhost,port) services'
+    depends_on:
+    - vhost_matrix
+    - portscan
+    run_on_failed_deps: true
+    optional: true
+    shell: true
+    timeout: 20m
+    run: |
+      touch {workspace}/vhost_services.txt
+      test -s {workspace}/vhost_matrix_hits.txt || { printf '[vhost-probe] no vhost hits -> skip\n'; exit 0; }
+      # pairs "name ip" from the matrix hits ("name [ip] code ..."), capped for runtime.
+      awk '{ip=$2; gsub(/[][]/,"",ip); if($1!="" && ip!="") print $1" "ip}' {workspace}/vhost_matrix_hits.txt \
+        | sort -u | head -300 > {workspace}/.vp_pairs
+      while read name ip; do
+        [ -n "$name" ] && [ -n "$ip" ] || continue
+        # open web ports of THIS IP from naabu; fallback to 443/80 if none recorded.
+        ports=$(jq -r --arg ip "$ip" 'select(.ip==$ip) | .port' {workspace}/naabu.jsonl 2>/dev/null | grep -E '^[0-9]+$' | sort -un)
+        [ -z "$ports" ] && ports="443 80"
+        for p in $ports; do
+          for sc in https http; do
+            url="$sc://$name:$p/"
+            out=$(curl -sk -i --resolve "$name:$p:$ip" --max-time 5 "$url" 2>/dev/null | head -c 100000)
+            [ -z "$out" ] && continue
+            code=$(printf '%s' "$out" | grep -aoE 'HTTP/[0-9.]+ [0-9][0-9][0-9]' | head -1 | grep -oE '[0-9][0-9][0-9]$')
+            [ -z "$code" ] && continue
+            title=$(printf '%s' "$out" | tr -d '\r' | grep -aoiE '<title[^>]*>[^<]*' | head -1 | sed 's/<[^>]*>//' | cut -c1-80 | tr '|' ' ')
+            printf '%s|%s|%s|%s|%s\n' "$url" "$name" "$ip" "$code" "$title" >> {workspace}/vhost_services.txt
+            break
+          done
+        done
+      done < {workspace}/.vp_pairs
+      rm -f {workspace}/.vp_pairs
+      sort -u -o {workspace}/vhost_services.txt {workspace}/vhost_services.txt
+      printf '[vhost-probe] %s vhost service record(s) across open ports\n' "$(wc -l < {workspace}/vhost_services.txt)"
+      exit 0
+    outputs:
+      vhost_services: '{workspace}/vhost_services.txt'
   - id: final_report
     name: 'targeted scan summary'
     depends_on:
     - httpx_probe
     - vhost_matrix
+    - vhost_probe
     - portscan
     run_on_failed_deps: true
     shell: true

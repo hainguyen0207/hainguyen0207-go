@@ -911,6 +911,8 @@ export interface TrafficHost {
 export interface Settings {
   traffic_capture: boolean;
   agent_traffic_binding: boolean; // Automatic Agent traffic-evidence binding, off by default; manual binding is unaffected.
+  endpoint_reconstructor: boolean; // Endpoint reconstructor agent master toggle, off by default.
+  endpoint_replay_write: boolean; // Allow POST/PUT/PATCH/DELETE during endpoint replay, off by default.
   llm_record: boolean; // LLM recording switch, off by default; disabled means no calls recorded.
   // Web search. brave_key_set / tavily_key_set reflect whether a key is stored
   // (the values are never returned). On PUT, send the corresponding field to set/clear.

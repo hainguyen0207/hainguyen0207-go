@@ -3357,6 +3357,8 @@ func (s *Server) settingsPayload() map[string]any {
 	return map[string]any{
 		"traffic_capture":          s.m.TrafficEnabled(),
 		"agent_traffic_binding":    s.m.pg.GetBool(settingAgentTrafficBinding, false),
+		"endpoint_reconstructor":   s.m.pg.GetBool(settingEndpointReconstructor, false),
+		"endpoint_replay_write":    s.m.pg.GetBool(settingEndpointReplayWrite, false),
 		"llm_record":               s.m.LLMRecordEnabled(),
 		"web_search_enabled":       on,
 		"web_search_backend":       backend,
@@ -3427,6 +3429,9 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TrafficCapture      *bool `json:"traffic_capture"`
 		AgentTrafficBinding *bool `json:"agent_traffic_binding"`
+		// Endpoint reconstructor agent: master toggle + allow non-idempotent (write) replay methods. Read per tool call, no agent rebuild needed.
+		EndpointReconstructor *bool `json:"endpoint_reconstructor"`
+		EndpointReplayWrite   *bool `json:"endpoint_replay_write"`
 		LLMRecord           *bool `json:"llm_record"` // LLM recording toggle (off by default); takes effect immediately, no agent rebuild needed
 		// Web search. WebSearchEnabled/Backend toggle the tool + backend; BraveKey/TavilyKey
 		// are optional — omit (null) to leave a stored key untouched, send "" to clear.
@@ -3459,6 +3464,18 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if req.EndpointReconstructor != nil {
+		if err := s.m.pg.SetBool(settingEndpointReconstructor, *req.EndpointReconstructor); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+	}
+	if req.EndpointReplayWrite != nil {
+		if err := s.m.pg.SetBool(settingEndpointReplayWrite, *req.EndpointReplayWrite); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
 	}
 	if req.ConstraintsInjectPlanner != nil {
 		if err := s.m.pg.SetBool(settingConstraintsInjectPlanner, *req.ConstraintsInjectPlanner); err != nil {

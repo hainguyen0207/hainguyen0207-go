@@ -46,6 +46,10 @@ func registerPushBack(runID, taskID string) {
 // of lost. No-ops when the run wasn't registered or produced no brief.
 func (s *Server) OnReconRunFinished(runID string) {
 	defer func() { _ = recover() }()
+	// Auto-aggregate this run's target assets into the rich inventory FIRST, for
+	// EVERY finished run (not just push-back ones), so no workflow asset is ever
+	// missed even when no agent runs the sync. Best-effort, idempotent.
+	s.autoPromoteRunAssets(runID)
 	v, ok := pendingPushBack.LoadAndDelete(runID)
 	if !ok {
 		return
@@ -72,9 +76,65 @@ func (s *Server) OnReconRunFinished(runID string) {
 	s.reviveTask(t)
 }
 
+// autoPromoteRunAssets resolves a finished run's target and promotes all of that
+// target's workflow-discovered assets into the rich inventory via the shared sync.
+// Wired into OnReconRunFinished so aggregation is automatic and complete, never
+// dependent on an agent being run. Best-effort: logs the counts, swallows errors.
+func (s *Server) autoPromoteRunAssets(runID string) {
+	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
+	defer cancel()
+	data, code, err := s.reconJSON(ctx, "GET", "/api/v1/runs/"+url.PathEscape(runID), nil)
+	if err != nil || code >= 300 {
+		return
+	}
+	var r struct {
+		Target string `json:"target"`
+	}
+	_ = json.Unmarshal(data, &r)
+	target := strings.TrimSpace(strings.ToLower(r.Target))
+	if target == "" {
+		return
+	}
+	counts, errs := s.runReconAssetSync(ctx, target, 0)
+	log.Printf("[asset-sync] run %s (%s) promoted to asset inventory: %v (errs=%d)", runID, target, counts, len(errs))
+	// Then kick the intelligent layer: auto-run the endpoint-reconstructor agent on
+	// this domain (deep JS extraction + request reconstruction + replay + appraisal),
+	// in the background, so it runs per task/per domain without anyone opening a chat.
+	s.maybeLaunchEndpointAgent(target)
+}
+
+// endpointReconLaunched throttles the per-target auto-launch of the endpoint agent so
+// repeated run-finished events for the same domain don't spawn duplicate background
+// reconstructions. target -> last launch time.
+var endpointReconLaunched sync.Map
+
+// maybeLaunchEndpointAgent fires a background endpoint-reconstructor agent run against
+// target, gated by the endpoint_reconstructor setting and throttled per target. The
+// agent's own tools are gated by the same setting, so when it runs they are live.
+func (s *Server) maybeLaunchEndpointAgent(target string) {
+	if target == "" || !s.m.pg.GetBool(settingEndpointReconstructor, false) {
+		return
+	}
+	now := time.Now()
+	if v, ok := endpointReconLaunched.Load(target); ok {
+		if last, _ := v.(time.Time); now.Sub(last) < 15*time.Minute {
+			return // recently launched for this target — skip duplicate
+		}
+	}
+	endpointReconLaunched.Store(target, now)
+	s.StartTriggeredRun(
+		"endpoint-reconstructor",
+		"endpoint reconstruction - "+target,
+		"A recon run just finished for "+target+". Automatically reconstruct & appraise all endpoints for this target, ESPECIALLY those in JavaScript, and write them into the asset inventory. "+
+			"Start with sync_recon_assets("+target+"). Then enumerate EVERY live host via recon_assets — all subdomains AND vhost-bound hosts, not just the apex. For EACH host be PORT-AWARE: read its open ports (recon_findings kind=port / recon_graph) and probe it on every open web port (80/443/8080/8443/8000/…), since a vhost only adds a Host header to its IP and may serve only on a non-standard port. On each (host, open port) find .js files and extract_js_endpoints each, reconstruct full requests, replay to observe real status, and upsert_endpoint_asset with full params/status/source/appraisal. Be thorough and professional; work only in scope.",
+		0, false, "", "",
+	)
+	log.Printf("[endpoint-recon] auto-launched endpoint-reconstructor agent for %s", target)
+}
+
 const (
 	defaultReconWorkflow = "02-full-recon-artex.yaml" // discovery-only: hands names to the agent, which resolves+probes (matches recon-first model); has all direct-API sources (fofa/leakix/subdomain.center/...) that 01 lacks
-	reconFirstMaxWait    = 90 * time.Minute // total cap across all recon workflows; then fall back
+	reconFirstMaxWait    = 90 * time.Minute           // total cap across all recon workflows; then fall back
 	reconPollEvery       = 15 * time.Second
 )
 

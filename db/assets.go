@@ -955,7 +955,14 @@ type UpsertEndpointReq struct {
 	Method string
 	Params []map[string]any
 	IP     string // optional
-	TaskID int64
+	// Observed response + provenance of a reconstructed/replayed endpoint. All
+	// optional: nil status/length keep whatever is already stored; Extra is merged
+	// into the row's extra jsonb (keys like source, from_js, content_type,
+	// reconstructed, synthetic, appraisal).
+	StatusCode    *int
+	ContentLength *int64
+	Extra         map[string]any
+	TaskID        int64
 }
 
 // UpsertEndpoint inserts or merges an endpoint asset. Domain, port, root_domain
@@ -1001,6 +1008,13 @@ func (s *AssetStore) UpsertEndpoint(req UpsertEndpointReq) (int64, error) {
 		return 0, err
 	}
 
+	extraJSON := "{}"
+	if len(req.Extra) > 0 {
+		if b, e := json.Marshal(req.Extra); e == nil {
+			extraJSON = string(b)
+		}
+	}
+
 	var domainVal, rootDomainVal, ipVal, csegVal any
 	if domain != "" {
 		domainVal = domain
@@ -1019,9 +1033,11 @@ func (s *AssetStore) UpsertEndpoint(req UpsertEndpointReq) (int64, error) {
 	err = s.tx.QueryRow(`
 INSERT INTO assets(
     type, url, method, domain, ip, port, root_domain,
-    params, company_id, company_source, task_ids, c_segment
+    params, company_id, company_source, task_ids, c_segment,
+    status_code, content_length, extra
 )
-VALUES ('endpoint', $1, $2, $3, $4, $5, $6, $7::jsonb[], $8, 'scope', $9::bigint[], $10::cidr)
+VALUES ('endpoint', $1, $2, $3, $4, $5, $6, $7::jsonb[], $8, 'scope', $9::bigint[], $10::cidr,
+    $11, $12, $13::jsonb)
 ON CONFLICT (url, method) WHERE type = 'endpoint' DO UPDATE SET
     params     = (
         SELECT ARRAY(
@@ -1030,8 +1046,11 @@ ON CONFLICT (url, method) WHERE type = 'endpoint' DO UPDATE SET
             ORDER BY (elem->>'location'), (elem->>'name'), elem::text DESC
         )
     ),
-    ip         = COALESCE(EXCLUDED.ip,        assets.ip),
-    c_segment  = COALESCE(EXCLUDED.c_segment, assets.c_segment),
+    ip             = COALESCE(EXCLUDED.ip,             assets.ip),
+    c_segment      = COALESCE(EXCLUDED.c_segment,      assets.c_segment),
+    status_code    = COALESCE(EXCLUDED.status_code,    assets.status_code),
+    content_length = COALESCE(EXCLUDED.content_length, assets.content_length),
+    extra          = assets.extra || EXCLUDED.extra,
     task_ids   = (SELECT ARRAY(SELECT DISTINCT unnest(assets.task_ids || EXCLUDED.task_ids))),
     company_id = CASE
         WHEN assets.company_source = 'explicit' AND assets.company_id IS NOT NULL THEN assets.company_id
@@ -1046,6 +1065,7 @@ ON CONFLICT (url, method) WHERE type = 'endpoint' DO UPDATE SET
 RETURNING id`,
 		normURL, method, domainVal, ipVal, nullableInt(port), rootDomainVal,
 		paramsJSON, companyID, taskIDs, csegVal,
+		req.StatusCode, req.ContentLength, extraJSON,
 	).Scan(&id)
 	if err != nil {
 		return 0, err

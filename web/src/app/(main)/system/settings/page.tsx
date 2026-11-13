@@ -26,6 +26,9 @@ export default function SystemSettingsPage() {
 
   const [trafficCapture, setTrafficCapture] = React.useState(false);
   const [agentTrafficBinding, setAgentTrafficBinding] = React.useState(false);
+  // Endpoint reconstructor agent + its write-replay allowance; both off by default.
+  const [endpointRecon, setEndpointRecon] = React.useState(false);
+  const [endpointReplayWrite, setEndpointReplayWrite] = React.useState(false);
   const [webSearch, setWebSearch] = React.useState(false);
   const [backend, setBackend] = React.useState("ddgs");
   const [braveKeySet, setBraveKeySet] = React.useState(false);
@@ -61,6 +64,8 @@ export default function SystemSettingsPage() {
   const apply = React.useCallback((s: Settings) => {
     setTrafficCapture(!!s.traffic_capture);
     setAgentTrafficBinding(!!s.agent_traffic_binding);
+    setEndpointRecon(!!s.endpoint_reconstructor);
+    setEndpointReplayWrite(!!s.endpoint_replay_write);
     setWebSearch(!!s.web_search_enabled);
     setBackend(s.web_search_backend || "ddgs");
     setBraveKeySet(!!s.brave_key_set);
@@ -184,6 +189,38 @@ export default function SystemSettingsPage() {
       })
       .catch((e) => {
         setAgentTrafficBinding(!v);
+        toast.error(swt("interface.m0267", { p0: (e as Error).message }));
+      })
+      .finally(() => setSaving(false));
+  };
+
+  const toggleEndpointRecon = (v: boolean) => {
+    setEndpointRecon(v); // optimistic
+    setSaving(true);
+    api
+      .setSettings({ endpoint_reconstructor: v })
+      .then((s) => {
+        apply(s);
+        toast.success(v ? swt("settings.endpointReconOn") : swt("settings.endpointReconOff"));
+      })
+      .catch((e) => {
+        setEndpointRecon(!v);
+        toast.error(swt("interface.m0267", { p0: (e as Error).message }));
+      })
+      .finally(() => setSaving(false));
+  };
+
+  const toggleEndpointReplayWrite = (v: boolean) => {
+    setEndpointReplayWrite(v); // optimistic
+    setSaving(true);
+    api
+      .setSettings({ endpoint_replay_write: v })
+      .then((s) => {
+        apply(s);
+        toast.success(v ? swt("settings.endpointReplayOn") : swt("settings.endpointReplayOff"));
+      })
+      .catch((e) => {
+        setEndpointReplayWrite(!v);
         toast.error(swt("interface.m0267", { p0: (e as Error).message }));
       })
       .finally(() => setSaving(false));
@@ -356,6 +393,46 @@ export default function SystemSettingsPage() {
               disabled={!loaded || saving}
               onCheckedChange={toggleAgentTrafficBinding}
             />
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4 break-inside-avoid md:mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldAlertIcon className="size-4" />
+              {swt("settings.endpointReconTitle")}</CardTitle>
+            <CardDescription id="endpoint-recon-description">
+              {rich("settings.endpointReconDesc", {}, { b: (text) => <b>{text}</b>, code: (text) => <code>{text}</code> })}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="endpoint-recon" className="text-sm font-normal text-muted-foreground">
+                {endpointRecon ? swt("settings.endpointEnabled") : swt("settings.endpointDisabled")}
+              </Label>
+              <Switch
+                id="endpoint-recon"
+                aria-describedby="endpoint-recon-description"
+                checked={endpointRecon}
+                disabled={!loaded || saving}
+                onCheckedChange={toggleEndpointRecon}
+              />
+            </div>
+            <div className="border-t pt-4">
+              <p className="text-muted-foreground mb-2 text-xs">
+                {rich("settings.endpointReplayDesc", {}, { b: (text) => <b>{text}</b>, code: (text) => <code>{text}</code> })}
+              </p>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="endpoint-replay-write" className="text-sm font-normal">
+                  {swt("settings.endpointReplayTitle")} · {endpointReplayWrite ? swt("settings.endpointEnabled") : swt("settings.endpointDisabled")}
+                </Label>
+                <Switch
+                  id="endpoint-replay-write"
+                  checked={endpointReplayWrite}
+                  disabled={!loaded || saving || !endpointRecon}
+                  onCheckedChange={toggleEndpointReplayWrite}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 

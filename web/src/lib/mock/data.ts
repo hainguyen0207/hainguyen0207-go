@@ -3577,6 +3577,8 @@ export const tools: Tool[] = [
 export const settings: Settings = {
   traffic_capture: true,
   agent_traffic_binding: false,
+  endpoint_reconstructor: false,
+  endpoint_replay_write: false,
   llm_record: false,
   web_search_enabled: true,
   web_search_backend: "ddgs",

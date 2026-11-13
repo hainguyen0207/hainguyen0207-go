@@ -40,6 +40,19 @@ export const en = {
   localOnlyOn: "Local-only LLM networking enabled",
   localOnlyOff: "Local-only LLM networking disabled",
   allowlistSaved: "Trusted CIDRs saved",
+
+  endpointReconTitle: "Endpoint reconstructor",
+  endpointReconDesc:
+    "Off by default. When enabled, the <b>Endpoint reconstructor</b> agent runs <b>automatically after every recon/workflow run</b> (per task, per domain) — no chat needed: it harvests endpoints, extracts them from the site's JavaScript, reconstructs a full request (<b>method + params</b>), replays it to observe the real status, and writes rich <code>endpoint</code> assets with an attack-surface appraisal. It also enables the manual chat agent + its tools; while off, both the auto-run and the tools are disabled.",
+  endpointReplayTitle: "Allow write-method replay",
+  endpointReplayDesc:
+    "Off by default. When enabled, the reconstructor may send <b>POST/PUT/PATCH/DELETE</b> (with synthetic values) during replay for deeper API coverage. Leave off to keep replay to safe <b>GET/HEAD/OPTIONS</b> only. Requires the reconstructor above to be on.",
+  endpointEnabled: "Enabled",
+  endpointDisabled: "Disabled",
+  endpointReconOn: "Endpoint reconstructor enabled",
+  endpointReconOff: "Endpoint reconstructor disabled",
+  endpointReplayOn: "Write-method replay enabled",
+  endpointReplayOff: "Write-method replay disabled",
 };
 export const ko: Record<keyof typeof en, string> = {
   judgeUsageTitle: "승인 토큰 사용량",
@@ -82,4 +95,17 @@ export const ko: Record<keyof typeof en, string> = {
   localOnlyOn: "로컬 전용 LLM 네트워크를 켰습니다",
   localOnlyOff: "로컬 전용 LLM 네트워크를 껐습니다",
   allowlistSaved: "신뢰 CIDR을 저장했습니다",
+
+  endpointReconTitle: "엔드포인트 재구성기",
+  endpointReconDesc:
+    "기본값은 꺼짐입니다. 켜면 <b>엔드포인트 재구성기</b> 에이전트가 <b>모든 정찰/워크플로 실행이 끝날 때마다 자동으로</b>(작업별·도메인별) 실행됩니다 — 대화가 필요 없습니다. 엔드포인트를 수집하고 사이트의 JavaScript에서 추출하며 전체 요청(<b>메서드 + 파라미터</b>)을 재구성한 뒤 재전송하여 실제 상태를 확인하고, 공격 표면 평가와 함께 풍부한 <code>endpoint</code> 자산을 기록합니다. 수동 대화 에이전트와 도구도 함께 활성화됩니다. 꺼져 있으면 자동 실행과 도구 모두 비활성화됩니다.",
+  endpointReplayTitle: "쓰기 메서드 재전송 허용",
+  endpointReplayDesc:
+    "기본값은 꺼짐입니다. 켜면 재구성기가 재전송 중 더 깊은 API 커버리지를 위해 (합성 값으로) <b>POST/PUT/PATCH/DELETE</b>를 보낼 수 있습니다. 끄면 안전한 <b>GET/HEAD/OPTIONS</b>로만 제한합니다. 위의 재구성기가 켜져 있어야 합니다.",
+  endpointEnabled: "켜짐",
+  endpointDisabled: "꺼짐",
+  endpointReconOn: "엔드포인트 재구성기를 켰습니다",
+  endpointReconOff: "엔드포인트 재구성기를 껐습니다",
+  endpointReplayOn: "쓰기 메서드 재전송을 켰습니다",
+  endpointReplayOff: "쓰기 메서드 재전송을 껐습니다",
 };

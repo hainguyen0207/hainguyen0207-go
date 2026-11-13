@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/json"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -74,6 +75,8 @@ func parseWorkspaceLocked(st *store.Store, run *store.Run, b *bus.Bus) {
 	scanHTTPX(st, run, ws)
 	scanNaabu(st, run, ws)
 	scanSubdomains(st, run, ws)
+	scanVhostHits(st, run, ws)
+	scanVhostServices(st, run, ws)
 	scanURLs(st, run, ws)
 	scanEndpoints(st, run, ws)
 	scanSecrets(st, run, ws)
@@ -493,6 +496,83 @@ func scanSubdomains(st *store.Store, run *store.Run, ws string) {
 			seen[h] = true
 			n++
 			st.InsertFinding(&store.Finding{RunID: run.ID, Kind: "subdomain", Host: h, Name: sp(h)})
+		})
+	}
+}
+
+// scanVhostHits ingests the vhost-matrix hits so a vhost that answers on a specific
+// IP is linked to THAT IP (not just added as a bare hostname). Line format from
+// workflow 05 vhost_matrix: "name [ip] code (base X)". Emitting the finding with both
+// Host and IP lets the asset promotion bind the vhost to the IP (bound_domains).
+func scanVhostHits(st *store.Store, run *store.Run, ws string) {
+	files := globFiles(ws, "vhost_matrix_hits.txt")
+	if len(files) == 0 {
+		return
+	}
+	seen := map[string]bool{}
+	n := 0
+	for _, f := range files {
+		eachLine(f, func(line string) {
+			fld := strings.Fields(strings.TrimSpace(line))
+			if len(fld) < 2 || n >= rowCap {
+				return
+			}
+			host := strings.ToLower(strings.Trim(strings.TrimSpace(fld[0]), "."))
+			ip := strings.Trim(fld[1], "[]")
+			if host == "" || !strings.Contains(host, ".") || net.ParseIP(ip) == nil {
+				return
+			}
+			key := host + "|" + ip
+			if seen[key] {
+				return
+			}
+			seen[key] = true
+			n++
+			ipv := ip
+			st.InsertFinding(&store.Finding{RunID: run.ID, Kind: "subdomain", Host: host, IP: &ipv, Name: sp(host)})
+		})
+	}
+}
+
+// scanVhostServices ingests per-(vhost,port) HTTP probe results so a vhost that
+// serves web on a specific IP:port becomes a real http asset (service) with its
+// status/title — not just a bare hostname. Line format (workflow 05 vhost_probe):
+// "url|host|ip|status|title".
+func scanVhostServices(st *store.Store, run *store.Run, ws string) {
+	files := globFiles(ws, "vhost_services.txt")
+	if len(files) == 0 {
+		return
+	}
+	n := 0
+	for _, f := range files {
+		eachLine(f, func(line string) {
+			if n >= rowCap {
+				return
+			}
+			parts := strings.SplitN(strings.TrimSpace(line), "|", 5)
+			if len(parts) < 4 {
+				return
+			}
+			u := strings.TrimSpace(parts[0])
+			host := strings.ToLower(strings.TrimSpace(parts[1]))
+			ip := strings.TrimSpace(parts[2])
+			if u == "" || host == "" {
+				return
+			}
+			fnd := &store.Finding{RunID: run.ID, Kind: "http", Host: host, URL: sp(u), Name: sp(host)}
+			if net.ParseIP(ip) != nil {
+				fnd.IP = &ip
+			}
+			if code, err := strconv.Atoi(strings.TrimSpace(parts[3])); err == nil && code > 0 {
+				fnd.StatusCode = &code
+			}
+			if len(parts) >= 5 {
+				if t := strings.TrimSpace(parts[4]); t != "" {
+					fnd.Title = &t
+				}
+			}
+			n++
+			st.InsertFinding(fnd)
 		})
 	}
 }
