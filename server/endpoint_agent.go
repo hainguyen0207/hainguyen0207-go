@@ -48,10 +48,11 @@ func (s *Server) endpointReconTools() []actool.CoreTool {
 		s.toolExtractJSEndpoints(),
 		s.toolReplayEndpoint(),
 		s.toolUpsertEndpointAsset(),
+		s.toolRecordCredential(),
 	}
 }
 
-var endpointReconToolKeys = []string{"sync_recon_assets", "extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset"}
+var endpointReconToolKeys = []string{"sync_recon_assets", "extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset", "record_credential"}
 
 // ---- #3 endpoint URL normalization (dedup variants) ----
 
@@ -191,6 +192,219 @@ var commonPortService = map[int]string{
 
 func portServiceName(port int) string { return commonPortService[port] }
 
+// ---- #4 secrets/tokens in JS ----
+
+type jsSecretPat struct {
+	name string
+	re   *regexp.Regexp
+	cred bool // true = a usable credential/token → also recorded in the host's auth
+}
+
+var jsSecretPats = []jsSecretPat{
+	{"aws_access_key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`), true},
+	{"google_api_key", regexp.MustCompile(`AIza[0-9A-Za-z_\-]{35}`), true},
+	{"slack_token", regexp.MustCompile(`xox[baprs]-[0-9A-Za-z-]{10,48}`), true},
+	{"github_token", regexp.MustCompile(`gh[pousr]_[0-9A-Za-z]{36,}`), true},
+	{"stripe_secret", regexp.MustCompile(`sk_live_[0-9A-Za-z]{20,}`), true},
+	{"jwt", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`), true},
+	{"private_key", regexp.MustCompile(`-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----`), true},
+	{"basic_auth_url", regexp.MustCompile(`https?://[A-Za-z0-9._%+\-]+:[^@\s"']{3,}@[A-Za-z0-9.\-]+`), true},
+	{"generic_secret", regexp.MustCompile(`(?i)(?:api[_-]?key|apikey|secret|access[_-]?token|auth[_-]?token|client[_-]?secret)["'\s:=]{1,4}["']([0-9A-Za-z._\-]{16,64})["']`), true},
+	{"firebase_db", regexp.MustCompile(`https://[a-z0-9-]+\.firebaseio\.com`), false},
+	{"google_oauth_client", regexp.MustCompile(`[0-9]+-[0-9A-Za-z_]{20,}\.apps\.googleusercontent\.com`), false},
+	{"mailgun_key", regexp.MustCompile(`key-[0-9a-f]{32}`), true},
+}
+
+// maskSecret keeps the shape but hides the body so stored secrets are not plaintext.
+func maskSecret(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= 8 {
+		return strings.Repeat("*", len(s))
+	}
+	return s[:4] + "******" + s[len(s)-4:]
+}
+
+// scanJSSecrets finds high-signal secrets/tokens in a JS body (masked).
+func scanJSSecrets(body []byte, fromJS string) []map[string]any {
+	var out []map[string]any
+	seen := map[string]bool{}
+	for _, p := range jsSecretPats {
+		for _, m := range p.re.FindAll(body, -1) {
+			raw := strings.TrimSpace(string(m))
+			if raw == "" || seen[p.name+raw] {
+				continue
+			}
+			seen[p.name+raw] = true
+			out = append(out, map[string]any{"type": p.name, "match": maskSecret(raw), "cred": p.cred, "from_js": fromJS})
+			if len(out) >= 50 {
+				return out
+			}
+		}
+	}
+	return out
+}
+
+// ---- #6 WAF / CDN fingerprint (header-based) ----
+
+var hostFingerprints = []struct{ name, kind, header, contains string }{
+	{"cloudflare", "cdn", "server", "cloudflare"},
+	{"cloudflare", "cdn", "cf-ray", ""},
+	{"akamai", "cdn", "server", "akamaighost"},
+	{"akamai", "cdn", "x-akamai-transformed", ""},
+	{"fastly", "cdn", "x-served-by", "cache-"},
+	{"fastly", "cdn", "server", "fastly"},
+	{"aws-cloudfront", "cdn", "server", "cloudfront"},
+	{"sucuri", "waf", "server", "sucuri"},
+	{"sucuri", "waf", "x-sucuri-id", ""},
+	{"imperva-incapsula", "waf", "x-iinfo", ""},
+	{"imperva-incapsula", "waf", "x-cdn", "incapsula"},
+	{"aws-waf", "waf", "x-amzn-requestid", ""},
+	{"f5-big-ip", "waf", "server", "big-ip"},
+	{"f5-big-ip", "waf", "set-cookie", "bigipserver"},
+	{"modsecurity", "waf", "server", "mod_security"},
+	{"barracuda", "waf", "server", "barracuda"},
+	{"wordfence", "waf", "server", "wordfence"},
+}
+
+// detectWAFCDN fingerprints each live host's WAF/CDN from response headers and tags
+// the host's service asset (extra.waf / extra.cdn) so testing can adapt (bypass
+// strategy, rate-limit awareness). Bounded + best-effort.
+func (s *Server) detectWAFCDN(ctx context.Context, as *db.AssetStore, target string) int {
+	if as == nil {
+		return 0
+	}
+	data, err := reconGetJSON(ctx, "/api/v1/assets?limit=500&q="+url.QueryEscape(target))
+	if err != nil {
+		return 0
+	}
+	var wrap struct {
+		Items []struct {
+			URL  string `json:"url"`
+			Host string `json:"host"`
+			Port int    `json:"port"`
+		} `json:"items"`
+	}
+	_ = json.Unmarshal(data, &wrap)
+	client := replayHTTPClient(6 * time.Second)
+	tagged, done := 0, 0
+	seen := map[string]bool{}
+	for _, it := range wrap.Items {
+		if done >= 80 {
+			break
+		}
+		u := it.URL
+		if u == "" && it.Host != "" {
+			sc := "https"
+			if it.Port == 80 {
+				sc = "http"
+			}
+			u = sc + "://" + it.Host
+		}
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		done++
+		req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "k1nzr3c0n-endpoint-recon/1.0")
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		wafSet, cdnSet := map[string]bool{}, map[string]bool{}
+		for _, fp := range hostFingerprints {
+			hv := strings.ToLower(resp.Header.Get(fp.header))
+			if hv == "" {
+				continue
+			}
+			if fp.contains == "" || strings.Contains(hv, fp.contains) {
+				if fp.kind == "cdn" {
+					cdnSet[fp.name] = true
+				} else {
+					wafSet[fp.name] = true
+				}
+			}
+		}
+		resp.Body.Close()
+		if len(wafSet) == 0 && len(cdnSet) == 0 {
+			continue
+		}
+		extra := map[string]any{}
+		if len(wafSet) > 0 {
+			extra["waf"] = keysOf(wafSet)
+		}
+		if len(cdnSet) > 0 {
+			extra["cdn"] = keysOf(cdnSet)
+		}
+		if _, err := as.UpsertHTTPService(db.UpsertHTTPServiceReq{URL: u, Extra: extra}); err == nil {
+			tagged++
+		}
+	}
+	return tagged
+}
+
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// toolRecordCredential stores any credential/token found during the engagement into
+// the host's asset auth[], so EVERY credential is kept in Assets. Not gated — storing
+// data is always allowed. Bound to worker/planner/auto/endpoint_recon.
+func (s *Server) toolRecordCredential() actool.CoreTool {
+	return wrTool("record_credential",
+		"Store a credential/token/key found during the engagement into the asset inventory (merged into the host's auth[]). Use for default/leaked creds, API keys, bearer tokens, session cookies, private keys — so every credential is kept in Assets, linked to the host it belongs to. Mask secrets you don't need in plaintext.",
+		objSchema(map[string]any{
+			"host":        strParam("the host or URL the credential is for (e.g. https://admin.example.com or admin.example.com)"),
+			"type":        strParam("credential type: basic|token|apikey|cookie|private_key|password|jwt|other"),
+			"username":    strParam("username (optional)"),
+			"password":    strParam("password (optional)"),
+			"token":       strParam("token/key/cookie value (optional)"),
+			"description": strParam("where/how found + what it unlocks (optional)"),
+		}, "host", "type"),
+		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
+			as := s.assetStore()
+			if as == nil {
+				return actool.Errorf("asset store not initialized"), nil
+			}
+			var a struct {
+				Host, Type, Username, Password, Token, Description string
+			}
+			_ = json.Unmarshal(in, &a)
+			h := strings.TrimSpace(a.Host)
+			if h == "" || strings.TrimSpace(a.Type) == "" {
+				return actool.Errorf("host and type are required"), nil
+			}
+			item := map[string]any{"type": strings.TrimSpace(a.Type)}
+			if a.Username != "" {
+				item["username"] = a.Username
+			}
+			if a.Password != "" {
+				item["password"] = a.Password
+			}
+			if a.Token != "" {
+				item["token"] = a.Token
+			}
+			if a.Description != "" {
+				item["description"] = a.Description
+			}
+			if !strings.HasPrefix(h, "http://") && !strings.HasPrefix(h, "https://") {
+				h = "https://" + h
+			}
+			if _, err := as.UpsertHTTPService(db.UpsertHTTPServiceReq{URL: h, Auth: []map[string]any{item}}); err != nil {
+				return actool.Errorf("record failed: " + err.Error()), nil
+			}
+			return jsonResult(map[string]any{"ok": true, "host": h, "type": a.Type})
+		})
+}
+
 // ---- #1 deterministic JS endpoint extraction (no LLM) ----
 
 // resolveJSEndpoint turns a raw token extracted from JS into an absolute http(s) URL,
@@ -229,13 +443,13 @@ func resolveJSEndpoint(base *url.URL, ep string) string {
 // recon url findings) and promotes every endpoint hiding inside them into the asset
 // inventory (source=js), with normalization + appraisal — no LLM involved. Bounded by
 // file + endpoint caps so it stays efficient.
-func (s *Server) syncJSEndpoints(ctx context.Context, as *db.AssetStore, target string) (int, int) {
+func (s *Server) syncJSEndpoints(ctx context.Context, as *db.AssetStore, target string) (int, int, int) {
 	if as == nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	data, err := reconGetJSON(ctx, fmt.Sprintf("/api/v1/findings?host=%s&kind=url&limit=8000", url.QueryEscape(target)))
 	if err != nil {
-		return 0, 1
+		return 0, 0, 1
 	}
 	var wrap struct {
 		Items []struct {
@@ -263,10 +477,10 @@ func (s *Server) syncJSEndpoints(ctx context.Context, as *db.AssetStore, target 
 		}
 	}
 	if len(jsURLs) == 0 {
-		return 0, 0
+		return 0, 0, 0
 	}
 	client := replayHTTPClient(10 * time.Second)
-	added, errs := 0, 0
+	added, secretsAdded, errs := 0, 0, 0
 	for _, ju := range jsURLs {
 		if added >= 4000 { // overall endpoint cap
 			break
@@ -306,8 +520,26 @@ func (s *Server) syncJSEndpoints(ctx context.Context, as *db.AssetStore, target 
 				added++
 			}
 		}
+		// #4 secrets/tokens in this JS → attach to the JS file (endpoint asset);
+		// credentials additionally recorded in the host's auth.
+		if secs := scanJSSecrets(body, ju); len(secs) > 0 {
+			njs := normalizeEndpointURL(ju)
+			_, _ = as.UpsertEndpoint(db.UpsertEndpointReq{URL: njs, Method: "GET", Extra: map[string]any{
+				"source": "js", "from_js": ju, "secrets": secs, "appraisal": appraiseEndpoint(njs, "GET", nil),
+			}})
+			secretsAdded += len(secs)
+			var auth []map[string]any
+			for _, sc := range secs {
+				if b, _ := sc["cred"].(bool); b {
+					auth = append(auth, map[string]any{"type": sc["type"], "token": sc["match"], "description": "found in JS: " + ju})
+				}
+			}
+			if len(auth) > 0 && base != nil && base.Host != "" {
+				_, _ = as.UpsertHTTPService(db.UpsertHTTPServiceReq{URL: base.Scheme + "://" + base.Host, Auth: auth})
+			}
+		}
 	}
-	return added, errs
+	return added, secretsAdded, errs
 }
 
 // ---- safe HTTP replay client ----
@@ -954,7 +1186,7 @@ func (s *Server) seedEndpointAgent() {
 	// tools are global (no DB row) so they reach every agent without binding.
 	if err := s.m.pg.AddAgentToToolBinding("endpoint_recon", []string{
 		"extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset",
-		"sync_recon_assets", "list_assets",
+		"sync_recon_assets", "record_credential", "list_assets",
 	}); err != nil {
 		log.Printf("[endpoint-recon] failed to bind tools: %v", err)
 	}
@@ -968,16 +1200,19 @@ func (s *Server) seedEndpointAgent() {
 // gated by the endpoint_reconstructor setting at call time. One-time, flag-guarded;
 // a user who later unbinds them is not overridden.
 func (s *Server) seedWorkerEndpointTools() {
-	const flag = "worker_endpoint_tools_v1"
+	const flag = "worker_endpoint_tools_v2" // v2: add record_credential + planner/auto
 	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
 		return
 	}
 	if err := s.m.pg.AddAgentToToolBinding("worker", []string{
-		"extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset", "sync_recon_assets",
+		"extract_js_endpoints", "replay_endpoint", "upsert_endpoint_asset", "sync_recon_assets", "record_credential",
 	}); err != nil {
 		log.Printf("[endpoint-recon] failed to bind endpoint tools to worker: %v", err)
 		return
 	}
+	// Credential capture is broadly useful — bind record_credential to planner + auto too.
+	_ = s.m.pg.AddAgentToToolBinding("planner", []string{"record_credential"})
+	_ = s.m.pg.AddAgentToToolBinding("auto", []string{"record_credential"})
 	_ = s.m.pg.SetSetting(flag, "true")
 	log.Printf("[endpoint-recon] bound endpoint tools to worker (per-worker JS recon)")
 }

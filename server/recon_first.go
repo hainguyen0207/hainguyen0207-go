@@ -98,8 +98,10 @@ func (s *Server) autoPromoteRunAssets(runID string) {
 	counts, errs := s.runReconAssetSync(ctx, target, 0)
 	// #1 deterministic JS → assets: download the target's JS and extract endpoints in
 	// code (no LLM), so JS endpoints land in the inventory on every run regardless.
-	jsAdded, jsErrs := s.syncJSEndpoints(ctx, s.assetStore(), target)
-	log.Printf("[asset-sync] run %s (%s) promoted: %v + js_endpoints=%d (errs=%d/%d)", runID, target, counts, jsAdded, len(errs), jsErrs)
+	jsAdded, jsSecrets, jsErrs := s.syncJSEndpoints(ctx, s.assetStore(), target)
+	wafTagged := s.detectWAFCDN(ctx, s.assetStore(), target) // #6 tag WAF/CDN per host
+	log.Printf("[asset-sync] run %s (%s) promoted: %v + js_endpoints=%d js_secrets=%d waf_cdn_tagged=%d (errs=%d/%d)",
+		runID, target, counts, jsAdded, jsSecrets, wafTagged, len(errs), jsErrs)
 	// Then kick the intelligent layer: auto-run the endpoint_recon agent on
 	// this domain (deep JS extraction + request reconstruction + replay + appraisal),
 	// in the background, so it runs per task/per domain without anyone opening a chat.

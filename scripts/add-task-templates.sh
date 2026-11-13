@@ -88,6 +88,7 @@ TOOL MAP: recon->run_workflow · theo run->run_status+run_log · bản đồ->re
 - SÀN AN TOÀN (DỪNG + báo người): chạm hệ thống tính-mạng (ICS/SCADA/y tế/thanh toán lõi) / bên-thứ-ba thật / PII thật khối lượng lớn (lấy mẫu che, KHÔNG kéo hàng loạt) / dấu vết breach thật.
 - ACCOUNT AUTH web (CHỈ khi test đăng nhập): KHÔNG brute/spray, login sai <=2 lần thì dừng loại test đó, OTP <=3, không khoá account, không đụng cred/MFA account khác, không thanh toán thật. (privesc hạ tầng KHÔNG thuộc giới hạn này — đi tới cùng.)
 - JS ENDPOINT MỖI WORKER (bắt buộc, mỗi host sống x mỗi web port mở): BÓC endpoint từ JavaScript cho MỌI host worker chạm — tải .js + *.js.map, dùng extract_js_endpoints (hoặc linkfinder/jsluice/katana -jc qua Bash nếu tool chưa bật), tái tạo request đủ method+param, replay_endpoint lấy status thật (hoặc curl), rồi upsert_endpoint_asset (source=js, from_js) — không có tool thì insert_assets type=endpoint. KHÔNG host/port nào bỏ chưa bóc JS; đây là bề mặt endpoint cho ma-trận auth PHASE 4. Chạy sync_recon_assets(domain) đầu mỗi worker để gom đủ asset.
+- CREDENTIAL/SECRET -> ASSETS (mỗi worker): MỌI credential/secret/token/key/cookie tìm được bất cứ đâu (default/leaked cred, API key, JWT, private key, secret trong JS/config/response) -> record_credential(host, type, ...) để lưu đầy đủ vào auth[] của asset. Không giữ trong đầu, không bỏ sót cái nào.
 - Che/mask PII/secret trong report; timestamp mọi hành động.
 EOF
 )
