@@ -215,16 +215,9 @@ var jsSecretPats = []jsSecretPat{
 	{"mailgun_key", regexp.MustCompile(`key-[0-9a-f]{32}`), true},
 }
 
-// maskSecret keeps the shape but hides the body so stored secrets are not plaintext.
-func maskSecret(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= 8 {
-		return strings.Repeat("*", len(s))
-	}
-	return s[:4] + "******" + s[len(s)-4:]
-}
-
-// scanJSSecrets finds high-signal secrets/tokens in a JS body (masked).
+// scanJSSecrets finds high-signal secrets/tokens in a JS body. The FULL value is
+// kept (not masked) so the operator can reproduce the PoC directly — this is an
+// authorized engagement's own data.
 func scanJSSecrets(body []byte, fromJS string) []map[string]any {
 	var out []map[string]any
 	seen := map[string]bool{}
@@ -235,7 +228,7 @@ func scanJSSecrets(body []byte, fromJS string) []map[string]any {
 				continue
 			}
 			seen[p.name+raw] = true
-			out = append(out, map[string]any{"type": p.name, "match": maskSecret(raw), "cred": p.cred, "from_js": fromJS})
+			out = append(out, map[string]any{"type": p.name, "match": raw, "cred": p.cred, "from_js": fromJS})
 			if len(out) >= 50 {
 				return out
 			}
