@@ -662,7 +662,7 @@ func (s *Server) runReconAssetSync(ctx context.Context, target string, maxScan i
 // chat with it manually, and the gating settings keep it inert until enabled.
 // Dependency: endpointReconTools were already SeedTool'd into the DB above this call.
 func (s *Server) seedEndpointAgent() {
-	const flag = "endpoint_recon_agent_seed_v1"
+	const flag = "endpoint_recon_agent_seed_v2" // v2: retry even if a v1 run got stuck "done" without creating the row
 	if v, _, _ := s.m.pg.GetSetting(flag); v == "true" {
 		return
 	}
