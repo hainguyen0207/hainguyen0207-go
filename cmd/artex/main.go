@@ -136,7 +136,9 @@ func run() int {
 
 	httpSrv := &http.Server{
 		Addr:              *addr,
-		Handler:           k1z.Mount(srv.Handler(), k1zHandler),
+		// Gate the k1z runner surface with the same license check as the ARTEX API;
+		// otherwise /api/v1/* (e.g. POST /api/v1/runs) would bypass licensing.
+		Handler:           k1z.Mount(srv.Handler(), srv.GateK1z(k1zHandler)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

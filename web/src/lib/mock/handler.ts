@@ -2222,6 +2222,38 @@ function route(m: string, path: string, seg: string[], q: URLSearchParams, b: Re
   if (path === "/traffic/exchange") return D.trafficDetail;
   if (path === "/settings" && m === "GET") return D.settings;
   if (path === "/settings" && m === "PUT") return { ...D.settings, ...b };
+  if (path === "/license" && m === "GET")
+    return {
+      machine_id: "mock00000000000000000000000000000000",
+      licensed: true,
+      sig_ok: true,
+      activated: true,
+      reason: "",
+      version: "mock0000",
+      customer: "Mock Customer",
+      tier: "pro",
+      features: [],
+      machine_bound: false,
+      limits: { targets: 0, tasks: 0, tokens: 0 },
+      issued_at: Math.floor(Date.now() / 1000),
+      expires_at: 0,
+    };
+  if (path === "/license" && m === "POST") {
+    const licensed = Boolean((b.code as string | undefined)?.trim());
+    return {
+      machine_id: "mock00000000000000000000000000000000",
+      licensed,
+      sig_ok: licensed,
+      activated: licensed,
+      reason: licensed ? "" : "no license activated",
+      version: "mock0000",
+      tier: licensed ? "pro" : "community",
+      features: [],
+      machine_bound: false,
+      limits: { targets: 0, tasks: 0, tokens: 0 },
+      expires_at: 0,
+    };
+  }
   if (path === "/settings/web-search/test") return { ok: true, count: 5, backend: D.settings.web_search_backend };
   if (path === "/settings/python/detect") return { python_interpreter: "/usr/bin/python3" };
   if (path === "/chat")

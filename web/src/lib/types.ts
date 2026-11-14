@@ -908,6 +908,26 @@ export interface TrafficHost {
 }
 
 // ---- App settings (runtime toggles) ----
+// Offline license status served by GET /api/license. machine_id is always
+// present (the operator sends it to the vendor for a machine-bound code).
+export interface LicenseStatus {
+  machine_id: string;
+  licensed: boolean; // valid signature AND active here (not expired / right machine)
+  sig_ok: boolean; // signature verified (may still be expired / wrong machine)
+  activated: boolean; // a code is stored (even if now invalid)
+  reason: string; // why not licensed, empty when licensed
+  version: string; // short fingerprint of the trusted signing key
+  customer?: string;
+  tier?: string; // community | pro | enterprise
+  features?: string[]; // empty/absent => all features
+  machine_bound?: boolean;
+  limits?: { targets: number; tasks: number; tokens: number };
+  issued_at?: number; // unix seconds
+  expires_at?: number; // unix seconds; 0 = perpetual
+  expired?: boolean;
+  days_left?: number;
+}
+
 export interface Settings {
   traffic_capture: boolean;
   agent_traffic_binding: boolean; // Automatic Agent traffic-evidence binding, off by default; manual binding is unaffected.

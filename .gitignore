@@ -72,3 +72,7 @@ skills/payloads-all-the-things/
 
 # Real recon API keys (never commit) — see scripts/api-keys.env.example
 scripts/api-keys.env
+
+# Vendor license signing key (NEVER commit) — the private half of the embedded pubkey
+scripts/license-private-key.b64
+scripts/*.key

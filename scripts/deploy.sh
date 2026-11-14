@@ -45,8 +45,10 @@ else
   step "SKIP_FE=1 — reusing existing embedded frontend (server/webui/dist)"
 fi
 
-step "Build backend (go build -tags embedui)"
-ARTEX_SKIP_FRONTEND=1 go build -tags embedui -o k1nzr3c0n ./cmd/artex
+step "Build backend (go build -tags embedui, stripped)"
+# -s -w -trimpath strip symbols/paths so the embedded license public key and the
+# gate logic are harder to locate and patch in the shipped binary.
+ARTEX_SKIP_FRONTEND=1 go build -tags embedui -trimpath -ldflags "-s -w -buildid=" -o k1nzr3c0n ./cmd/artex
 ./k1nzr3c0n -h >/dev/null 2>&1 && echo "binary OK"
 
 step "Sync runtime assets into $BASE (scripts, workflows, wordlists, skills)"

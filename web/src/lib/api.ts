@@ -16,6 +16,7 @@ import type {
   Agent,
   AgentDetail,
   AgentTrigger,
+  LicenseStatus,
   ArchiveBatchItem,
   Asset,
   AssetInterceptRule,
@@ -859,6 +860,11 @@ export const api = {
   // ---- app settings (runtime toggles) ----
   settings: () => get<Settings>(`/settings`),
   setSettings: (patch: Partial<Settings>) => put<Settings>(`/settings`, patch),
+
+  // ---- offline license ----
+  license: () => get<LicenseStatus>(`/license`),
+  // Activate a pasted code; send "" to clear/deactivate and revert to the locked state.
+  activateLicense: (code: string) => post<LicenseStatus>(`/license`, { code }),
   // Run a real "test" search with the given (or saved) config to verify it works.
   testWebSearch: (patch: {
     web_search_backend?: string;

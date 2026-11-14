@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FolderOpen,
   FolderSync,
+  KeyRound,
   LayoutDashboard,
   type LucideIcon,
   MessageSquare,
@@ -101,6 +102,7 @@ export const sidebarItems: NavGroup[] = [
       { id: "approvals", get title() { return swt("interface.m2145"); }, url: "/system/intercept/approvals", icon: ClipboardList },
       { id: "logs", get title() { return swt("interface.m2873"); }, url: "/system/logs", icon: ScrollText },
       { id: "settings", get title() { return swt("interface.m1644"); }, url: "/system/settings", icon: Settings2 },
+      { id: "license", title: "License", url: "/system/license", icon: KeyRound },
     ],
   },
   {

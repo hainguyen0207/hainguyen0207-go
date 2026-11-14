@@ -152,6 +152,11 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		provByProfile:  map[int64]*provEntry{}, llmHealth: newLLMHealthRegistry(m.pg),
 		taskAgents: map[string]*taskAgentBundle{}, archiveWake: make(chan struct{}, 1)}
 	s.initSideQuestions()
+	// Load the offline license once at startup so the gate middleware never
+	// re-verifies per request; re-loaded after a key is pasted via /api/license
+	// and every 15 min by licenseRefreshLoop (enforces mid-run expiry).
+	s.loadLicense()
+	go s.licenseRefreshLoop()
 	// Circuit-breaker threshold/cooldown are hot parameters on the failure path; at startup the global retry policy is pushed to the Registry once;
 	// afterwards each policy save pushes it again (saveLLMRetryPolicy).
 	s.applyRetryPolicy()
@@ -816,6 +821,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/llm/records/{id}", s.pgGetLLMRecord)
 	mux.HandleFunc("GET /api/settings", s.getSettings)
 	mux.HandleFunc("PUT /api/settings", s.putSettings)
+	// Offline license: GET status (machine-id + tier + expiry), POST to activate/clear a pasted code.
+	mux.HandleFunc("GET /api/license", s.getLicense)
+	mux.HandleFunc("POST /api/license", s.postLicense)
 	// Vulnerability IM push. Channels are a "multi-instance + per-channel filter rules" resource, so they form a separate group of
 	// REST endpoints rather than being stuffed into the flat /api/settings key-values.
 	mux.HandleFunc("GET /api/notify/meta", s.notifyMeta)
@@ -952,7 +960,7 @@ func (s *Server) Handler() http.Handler {
 	// /api/* goes through CORS + JWT; everything else is served by the embedded
 	// frontend (public — auth is enforced client-side and on the API). With the
 	// no-embed build the webui handler just 404s (run `next dev` separately).
-	api := cors(s.requireAuth(mux))
+	api := cors(s.requireAuth(s.requireLicense(mux)))
 	root := http.NewServeMux()
 	root.Handle("/api/", api)
 	root.Handle("/", s.webuiHandler())
