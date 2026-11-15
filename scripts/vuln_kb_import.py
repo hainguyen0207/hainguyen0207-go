@@ -189,10 +189,77 @@ def import_generic(db, path, project, platform):
     db.commit()
     return added, skipped, bad
 
+def import_exploitdb(db, csv_path):
+    import csv
+    pid = get_project(db, "exploit-db", "WEB", "mixed")
+    seen = existing_ext_ids(db)
+    added = skipped = bad = 0
+    TYPE_CAT = {"webapps":"Other","dos":"Application-Level Denial-of-Service (DoS)",
+                "remote":"Using Components with Known Vulnerabilities",
+                "local":"Using Components with Known Vulnerabilities"}
+    with open(csv_path, "r", errors="ignore") as fh:
+        for row in csv.DictReader(fh):
+            try:
+                ext = "edb:" + str(row.get("id") or "")
+                if ext in seen or not row.get("id"): skipped += 1; continue
+                name = str(row.get("description") or "").strip() or ("EDB-" + row["id"])
+                codes = str(row.get("codes") or "")
+                typ = (row.get("type") or "").lower()
+                category = TYPE_CAT.get(typ, "Using Components with Known Vulnerabilities")
+                sev = "CRITICAL" if "CVE-" in codes else "VARIES"
+                sub = (typ + " / " + (row.get("platform") or ""))[:200]
+                rp = []
+                if codes: rp.append("codes: " + codes)
+                if row.get("platform"): rp.append("platform: " + row["platform"])
+                if row.get("type"): rp.append("type: " + row["type"])
+                if row.get("port"): rp.append("port: " + row["port"])
+                if row.get("tags"): rp.append("tags: " + row["tags"])
+                if row.get("file"): rp.append("exploit file: " + row["file"])
+                if row.get("source_url"): rp.append("ref: " + row["source_url"])
+                insert_issue(db, pid, name, category, sub, sev, name, "\n".join(rp)[:2000], ext,
+                             {"src":"exploitdb","id":row.get("id"),"codes":codes,"file":row.get("file")})
+                seen.add(ext); added += 1
+                if added % 5000 == 0: db.commit(); print("  ...%d added" % added)
+            except Exception:
+                bad += 1
+    db.commit()
+    return added, skipped, bad
+
+def import_kev(db, json_path):
+    doc = json.load(open(json_path, "r", errors="ignore"))
+    vulns = doc.get("vulnerabilities") if isinstance(doc, dict) else doc
+    pid = get_project(db, "CISA-KEV", "WEB", "cve")
+    seen = existing_ext_ids(db)
+    added = skipped = bad = 0
+    for v in (vulns or []):
+        try:
+            cve = v.get("cveID") or ""
+            ext = "kev:" + cve
+            if ext in seen or not cve: skipped += 1; continue
+            name = (v.get("vulnerabilityName") or (cve + " - " + (v.get("product") or ""))).strip()
+            cwes = v.get("cwes") or []
+            cwe = (cwes[0] if isinstance(cwes, list) and cwes else "")
+            category = CWE_CAT.get(str(cwe).replace("CWE-",""), "Using Components with Known Vulnerabilities")
+            sub = ((v.get("vendorProject") or "") + " / " + (v.get("product") or ""))[:200]
+            desc = str(v.get("shortDescription") or "")
+            rp = ["CVE: " + cve]
+            if cwe: rp.append("CWE: " + str(cwe))
+            if v.get("vendorProject"): rp.append("vendor: " + v["vendorProject"])
+            if v.get("product"): rp.append("product: " + v["product"])
+            if v.get("requiredAction"): rp.append("action: " + v["requiredAction"])
+            if v.get("knownRansomwareCampaignUse"): rp.append("ransomware: " + str(v["knownRansomwareCampaignUse"]))
+            insert_issue(db, pid, name, category, sub, "CRITICAL", desc, "\n".join(rp)[:1500], ext,
+                         {"src":"kev","cve":cve,"cwe":cwe})
+            seen.add(ext); added += 1
+        except Exception:
+            bad += 1
+    db.commit()
+    return added, skipped, bad
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
-    ap.add_argument("--source", required=True, choices=["nuclei","generic"])
+    ap.add_argument("--source", required=True, choices=["nuclei","generic","exploitdb","kev"])
     ap.add_argument("--input", required=True)
     ap.add_argument("--project", default="")
     ap.add_argument("--platform", default="WEB")
@@ -202,6 +269,10 @@ def main():
     before = db.execute("SELECT count(*) FROM issues").fetchone()[0]
     if a.source == "nuclei":
         added, skipped, bad = import_nuclei(db, a.input)
+    elif a.source == "exploitdb":
+        added, skipped, bad = import_exploitdb(db, a.input)
+    elif a.source == "kev":
+        added, skipped, bad = import_kev(db, a.input)
     else:
         added, skipped, bad = import_generic(db, a.input, a.project, a.platform)
     total = db.execute("SELECT count(*) FROM issues").fetchone()[0]
