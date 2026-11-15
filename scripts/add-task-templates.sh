@@ -193,6 +193,109 @@ DESC="# PLAYBOOK THỰC THI 6-PHASE (chi tiết). BẤT BIẾN + RÀNG BUỘC �
 echo "Creating the Red Team task template on $BASE_URL ..."
 create "Red Team" "$GOAL" "$DESC"
 
+# ═════════════════════════════════════════════════════════════════════════════
+#  Scope-shaped templates (Subdomain / Host chỉ định / Sub+Host). Description =
+#  playbook methodology chi tiết; goal = mục tiêu ngắn. In-scope/Out-of-scope do
+#  operator điền ở ô riêng trên form (Out-of-scope tự thành block rule chặn cứng).
+# ═════════════════════════════════════════════════════════════════════════════
+
+SD_GOAL='Recon đầy đủ + khai thác toàn bộ subdomain của (các) domain In-scope. Điền In-scope / Out-of-scope ở ô riêng; làm theo phương pháp chi tiết trong phần mô tả.'
+SD_DESC=$(cat <<'EOF'
+# PLAYBOOK: RECON + KHAI THÁC TOÀN BỘ SUBDOMAIN (chi tiết — không bỏ sót)
+Phạm vi lấy từ ô In-scope; vùng cấm ở Out-of-scope (đã chặn cứng, tuyệt đối không đụng). Methodology/payload/catalogue sống trong skill — load_skill TRƯỚC mỗi mảng (web-pentest, recon-engine, endpoint-recon, api-recon, finding-discipline).
+
+## PHASE 1 — GOM SUBDOMAIN (nhiều nguồn, đầy đủ)
+- Workflow 02-full-recon-artex tự chạy nền song song: ~33 nguồn passive (subfinder -all, crt.sh/crtsh-psql, subdomain.center, github-subdomains, SecurityTrails, VirusTotal, chaos), permutation (gotator/dnsgen/alterx), cert SAN (tlsx/cero), reverse-DNS, ASN/CIDR (asnmap/mapcidr). TÁI DÙNG recon_assets/recon_runs/recon_graph; KHÔNG recon lại cái đã có.
+- Bổ sung tay nếu sót: AXFR (dig AXFR @ns mỗi NS), records MX/NS/TXT/SPF/DMARC, Google/GitHub dork.
+- Hợp nhất → danh sách subdomain đầy đủ (sống + chết). Tên KHÔNG resolve vẫn là SURFACE (có thể là vhost).
+
+## PHASE 2 — RESOLVE + PROBE + VHOST + PORT
+- Resolve mỗi sub: public + DoH + NS auth (dig @ns). SERVFAIL/timeout → recheck 8.8.8.8 / 1.1.1.1 / 9.9.9.9 trước khi coi là chết.
+- Probe HTTP: httpx (-td tech, -sc status, -title, -favicon). Lập danh sách host SỐNG.
+- PORT SCAN mọi IP: naabu (full range) → nmap -sV -sC port mở. Cờ dịch vụ unauth: redis 6379, mongo 27017, elastic 9200, SMB 445, RDP 3389, FTP 21, SNMP 161, docker 2375, k8s 6443/10250.
+- VHOST MATRIX: workflow 05-scan-hosts (target_hosts = toàn bộ tên, vhost_all_names=true) → sweep tên × IP mở-web, GATE baseline random-host (loại catch-all), khác baseline = vhost SỐNG → asset. Kể cả tên không resolve.
+- PORT-AWARE: mỗi host test trên MỌI web port mở (80/443/8080/8443/8000/8888...), vì vhost có thể chỉ phục vụ trên port lạ.
+
+## PHASE 3 — FINGERPRINT + MAP CVE
+- Mỗi host sống: framework + thư viện + PHIÊN BẢN chính xác (httpx -td, webanalyze/wappalyzer, favicon-hash, headers/cookie, error-page, /VERSION, package.json/composer.json/pom.xml, retire.js). Lập 1 SBOM mỗi host — liệt kê HẾT, không bỏ component.
+- Map CVE từng thành phần: CISA KEV + NVD + GitHub Advisory + searchsploit + nuclei + PoC công khai. Ưu tiên RCE / auth-bypass / deserialization / SSRF. Edge/app server (Citrix/Fortinet/Ivanti/GlobalProtect/F5/Exchange/Zimbra/Confluence/WebLogic/Struts/Spring) = ưu tiên hàng đầu. Dependency cũ (retire.js/osv-scanner) → CVE, xác minh REACHABLE.
+
+## PHASE 4 — KHAI THÁC (mỗi host — đối chiếu ĐỦ lớp lỗ)
+- JS RECON SÂU: tải mọi .js + *.js.map, dựng source (sourcemapper), trích MỌI endpoint/route/API-path/param/secret (linkfinder/jsluice/katana -jc). upsert_endpoint_asset (source=js).
+- ĐỐI CHIẾU TOÀN BỘ VULN CATALOGUE (load_skill web-pentest → references/vuln-catalogue.md) trên TỪNG endpoint: broken access control/IDOR/BOLA, SSRF, injection (SQLi/SSTI/command/NoSQL/LDAP), auth/JWT/OAuth, file upload, XXE, deserialization, business logic, mass-assignment, open redirect, CORS/CSP/SOP, race condition, path traversal/LFI. Mỗi lớp áp-dụng-được → terminal (tested | reasoned-negative | out-of-scope); không bỏ lớp nào không lý do.
+- MA TRẬN AUTH mỗi endpoint: unauth · self-user · user#2 (cross-account) · admin × mỗi method (GET/POST/PUT/DELETE/PATCH/OPTIONS) × param (arjun/x8 fuzz).
+- DOM XSS / client-side taint: test mọi cặp source→sink (dalfox --mining-dom --deep-domxss, Burp DOM Invader). Bypass: WAF (encoding/case/comment/chunked), 401/403 (path-case, %2e, ..;/, header X-Original-URL), filter, rate-limit (chứng minh bằng SỐ HỌC + keying matrix, KHÔNG brute thật). Chain nhiều bug nhỏ → RCE/ATO/full-read.
+
+## PHASE 5 — FINDING (chuẩn HackerOne — bắt buộc)
+- VERIFY 2 lần, độc lập, không phá hoại, TRƯỚC report_finding. Mỗi finding đủ: name cụ thể ("<lỗ> trên <asset> qua <param>"), severity + CVSS v3.1 vector, vulnclass + CWE-ID, summary + IMPACT kinh doanh, asset_ids, evidence = (1) STEPS TO REPRODUCE đánh số copy-paste chạy lại được + (2) PROOF request+response THẬT + marker + (3) CVSS + (4) CWE + (5) REMEDIATION, traffic_refs (baseline + proof + verify). DEDUP (1 bug-class = 1 finding + list biến thể; cùng-nguyên-nhân nhiều host = 1 finding, asset_ids liệt kê hết). THIẾU PoC/steps/traffic = CHƯA đủ, KHÔNG report.
+
+## RÀNG BUỘC
+- Chỉ test In-scope + subdomain/vhost/IP liên quan. Out-of-scope = chặn cứng, tuyệt đối không đụng. KHÔNG DoS/phá hoại production. Lộ surface mới trong scope → insert_assets + xử lý.
+- XONG khi: mọi subdomain + vhost sống đã resolve/probe/port-scan/fingerprint + đối chiếu hết lớp lỗ áp-dụng-được; mọi lỗ xác nhận đã report chuẩn.
+EOF
+)
+create "Subdomain - Recon + Test" "$SD_GOAL" "$SD_DESC"
+
+HI_GOAL='Chỉ khai thác đúng các host/URL trong In-scope, KHÔNG mở rộng subdomain. Điền In-scope / Out-of-scope ở ô riêng; làm theo phương pháp chi tiết trong mô tả.'
+HI_DESC=$(cat <<'EOF'
+# PLAYBOOK: KHAI THÁC HOST/URL CHỈ ĐỊNH — KHÔNG MỞ RỘNG (chi tiết — không bỏ sót)
+Phạm vi lấy từ ô In-scope (đúng các host/URL liệt kê); vùng cấm ở Out-of-scope (chặn cứng). Methodology sống trong skill — load_skill TRƯỚC mỗi mảng (web-pentest, endpoint-recon, api-recon, finding-discipline).
+
+## RÀNG BUỘC SCOPE (quan trọng nhất)
+- CHỈ test đúng các host/URL trong In-scope. TUYỆT ĐỐI KHÔNG enumerate subdomain, KHÔNG quét *.domain, KHÔNG chạy workflow gom subdomain, KHÔNG tự mở rộng sang host khác.
+- Phát hiện host/subdomain mới → record_fact GHI NHẬN nhưng KHÔNG test (ngoài scope).
+
+## PHASE 1 — MAP TỪNG HOST
+- Mỗi host/URL: resolve + probe httpx (-td, -sc, -title, -favicon) trên MỌI web port có thể (80/443/8080/8443/8000/8888). Port-scan IP của host (naabu → nmap -sV -sC) nếu được phép.
+- Fingerprint tech chính xác: framework + thư viện + PHIÊN BẢN (webanalyze, favicon-hash, headers/cookie, error-page, retire.js). SBOM mỗi host. Map CVE (KEV/NVD/searchsploit/nuclei), xác minh REACHABLE.
+
+## PHASE 2 — JS + ENDPOINT
+- Tải mọi .js + *.js.map của host → dựng source (sourcemapper) → trích MỌI endpoint/route/API-path/param/secret (linkfinder/jsluice/katana -jc + grep fetch|axios|XHR). Gộp danh sách endpoint đầy đủ.
+- Tái tạo request đủ method + param → replay lấy status thật → upsert_endpoint_asset. Lấy cả swagger/openapi.json/graphql/.well-known.
+
+## PHASE 3 — ĐỐI CHIẾU ĐỦ LỚP LỖ (mỗi endpoint)
+- Load_skill web-pentest → references/vuln-catalogue.md. Đối chiếu TOÀN BỘ trên TỪNG endpoint theo thứ tự risk: broken access control/IDOR/BOLA, SSRF, injection (SQLi/SSTI/command/NoSQL/LDAP), auth/JWT/OAuth, file upload, XXE, deserialization, business logic, mass-assignment, open redirect, CORS/CSP, race condition, path traversal/LFI. Mỗi lớp áp-dụng-được → terminal (tested | reasoned-negative | out-of-scope), không bỏ lớp nào không lý do.
+- MA TRẬN AUTH: unauth · self-user · user#2 (cross-account IDOR/BOLA) · admin × mỗi method (GET/POST/PUT/DELETE/PATCH/OPTIONS) × param (arjun/x8 fuzz param ẩn). KHÔNG endpoint nào bỏ chưa test.
+- DOM XSS: test cặp source→sink (dalfox --mining-dom, Burp DOM Invader, PoC marker không phá hoại).
+- NGHIÊN CỨU BYPASS: WAF (encoding/case/comment/chunked/request-smuggling), 401/403 (path-case, %2e, ..;/, /.;/, header X-Original-URL/X-Rewrite-URL/X-Forwarded-For, verb-tamper), auth/login bypass, filter, rate-limit (bằng SỐ HỌC + keying matrix, KHÔNG brute thật), CORS/CSP/SOP, upload-filter. Chain bug nhỏ → RCE/ATO/full-read.
+- TRADECRAFT (skill web-pentest): IDOR matrix, mass-assignment, business-logic & payment tamper, single-packet race, ATO reset/host-poison, open-redirect ladder.
+
+## PHASE 4 — FINDING (chuẩn — bắt buộc)
+- VERIFY 2 lần, độc lập, không phá hoại, TRƯỚC report_finding. Đủ: name cụ thể, severity + CVSS v3.1, vulnclass + CWE, summary + IMPACT, asset_ids, evidence = STEPS TO REPRODUCE đánh số + PROOF request+response THẬT + marker + CVSS + CWE + REMEDIATION, traffic_refs. DEDUP. THIẾU PoC/steps = KHÔNG report.
+
+## XONG khi: mọi host/URL trong In-scope đã map + bóc JS + đối chiếu hết lớp lỗ áp-dụng-được + thử bypass; mọi lỗ xác nhận đã report chuẩn. KHÔNG DoS; KHÔNG mở rộng ngoài In-scope.
+EOF
+)
+create "Host chi dinh" "$HI_GOAL" "$HI_DESC"
+
+SH_GOAL='Gom + khai thác toàn bộ subdomain của domain In-scope VÀ các host chỉ định. Điền In-scope / Out-of-scope ở ô riêng; làm theo phương pháp chi tiết trong mô tả.'
+SH_DESC=$(cat <<'EOF'
+# PLAYBOOK: SUBDOMAIN TOÀN BỘ + HOST CHỈ ĐỊNH (chi tiết — không bỏ sót)
+In-scope gồm (các) domain gốc (gom hết subdomain) VÀ các host/URL chỉ định (test thêm, kể cả ngoài domain đó). Out-of-scope chặn cứng. Methodology sống trong skill — load_skill TRƯỚC mỗi mảng (web-pentest, recon-engine, endpoint-recon, api-recon, finding-discipline).
+
+## PHASE 1 — GOM + MAP + VHOST
+- Gom TẤT CẢ subdomain của domain In-scope: workflow 02-full-recon-artex tự chạy nền (33 nguồn passive + permutation + cert SAN + ASN/CIDR; tái dùng recon có sẵn, KHÔNG recon lại) + bổ sung tay nếu sót (AXFR, records, dork). ĐƯA CÁC HOST CHỈ ĐỊNH vào scope NGAY.
+- Resolve (public + DoH + NS auth) + probe httpx + port-scan (naabu → nmap -sV -sC) mọi host sống (subdomain + host chỉ định). Cờ dịch vụ unauth (redis/mongo/elastic/SMB/RDP/docker/k8s).
+- VHOST MATRIX: workflow 05-scan-hosts cho domain In-scope (target_hosts = toàn bộ tên, vhost_all_names=true) → sweep tên × IP, GATE baseline, vhost SỐNG → asset. PORT-AWARE mọi web port mở.
+
+## PHASE 2 — FINGERPRINT + MAP CVE
+- Mỗi host sống: framework + thư viện + PHIÊN BẢN (webanalyze, favicon-hash, headers, retire.js). SBOM. Map CVE (KEV/NVD/searchsploit/nuclei/GitHub Advisory), xác minh REACHABLE. Edge/app server ưu tiên.
+
+## PHASE 3 — KHAI THÁC (mỗi host — đối chiếu ĐỦ lớp lỗ)
+- JS RECON: tải mọi .js + *.js.map → sourcemapper → trích endpoint/param/secret (linkfinder/jsluice/katana -jc) → upsert_endpoint_asset. Lấy swagger/openapi/graphql/.well-known.
+- ĐỐI CHIẾU TOÀN BỘ VULN CATALOGUE (load_skill web-pentest → references/vuln-catalogue.md) trên TỪNG endpoint: broken access control/IDOR/BOLA, SSRF, injection (SQLi/SSTI/command/NoSQL), auth/JWT/OAuth, file upload, XXE, deserialization, business logic, mass-assignment, open redirect, CORS/CSP, race condition, path traversal/LFI. Mỗi lớp áp-dụng-được → terminal (tested | reasoned-negative | out-of-scope).
+- MA TRẬN AUTH mỗi endpoint: unauth · self-user · user#2 (cross-account) · admin × mỗi method × param (arjun/x8). DOM XSS (dalfox --mining-dom, Burp DOM Invader). BYPASS: WAF, 401/403, filter, rate-limit (số học), CORS/CSP. Chain bug → RCE/ATO/full-read.
+
+## PHASE 4 — FINDING (chuẩn — bắt buộc)
+- VERIFY 2 lần, độc lập, không phá hoại, TRƯỚC report_finding. Đủ: name cụ thể, severity + CVSS v3.1 vector, vulnclass + CWE, summary + IMPACT, asset_ids, evidence = STEPS TO REPRODUCE đánh số + PROOF request+response THẬT + marker + CVSS + CWE + REMEDIATION, traffic_refs. DEDUP (cùng-nguyên-nhân nhiều host = 1 finding). THIẾU PoC/steps = KHÔNG report.
+
+## RÀNG BUỘC
+- Phạm vi: *.{domain In-scope} + vhost/IP liên quan + các HOST CHỈ ĐỊNH. Out-of-scope chặn cứng, tuyệt đối không đụng. KHÔNG nới ra ngoài 2 nhóm. KHÔNG DoS. Lộ surface mới trong scope → thêm + xử lý.
+- XONG khi: mọi host (subdomain + vhost sống + host chỉ định) đã map + fingerprint + đối chiếu hết lớp lỗ; mọi lỗ xác nhận đã report chuẩn.
+EOF
+)
+create "Sub + Host chi dinh" "$SH_GOAL" "$SH_DESC"
+
 # The former standalone "Recon-Driven Pentest" template is now FOLDED INTO "Red Team".
 # Delete the old separate template if an earlier seed created it, so there is ONE template.
 remove_template() { # remove <name>
