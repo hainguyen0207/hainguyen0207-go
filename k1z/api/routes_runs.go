@@ -47,6 +47,27 @@ func (s *Server) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 			_ = s.St.CreateTarget(&store.Target{Name: t, ScopeJSON: string(sc), Mode: "bounty"})
 		}
 	}
+	// Dedup: if a run of the SAME workflow for the SAME target is already in flight
+	// (the task-create parallel recon launched it, or a concurrent run_workflow call),
+	// reuse that run instead of starting a duplicate — avoids double recon.
+	if tgt := strings.ToLower(strings.TrimSpace(body.Target)); tgt != "" && !body.Resume && body.Workflow != "" {
+		if runs, _, lerr := s.St.ListRuns(store.RunFilter{Workflow: body.Workflow, Limit: 50}); lerr == nil {
+			for _, ex := range runs {
+				if !strings.EqualFold(strings.TrimSpace(ex.Target), tgt) {
+					continue
+				}
+				switch strings.ToLower(strings.TrimSpace(ex.Status)) {
+				case "completed", "done", "finished", "success", "failed", "error",
+					"cancelled", "canceled", "paused", "timeout", "stopped":
+					// terminal — launch a fresh run below
+				default:
+					// a running/queued run exists → reuse it (no duplicate)
+					writeJSON(w, 200, runToDict(ex))
+					return
+				}
+			}
+		}
+	}
 	in := runner.LaunchInput{
 		Workflow:        body.Workflow,
 		Target:          body.Target,
