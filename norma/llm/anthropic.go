@@ -201,6 +201,14 @@ func (p *anthropicProvider) buildBody(req CompletionRequest, stream bool) ([]byt
 		// does not burn the budget on a normal reply).
 		thinkingType = "disabled"
 	}
+	if thinkingType == "disabled" && isClaude5Model(p.cfg.Model) {
+		// Claude 5.x REJECTS thinking.type=disabled with a 400; its off switch is
+		// "between_tools" (no thinking before the reply; inter-tool updates come back
+		// as thinking blocks). Translate an explicit "disabled" from auxiliary calls
+		// (compaction, approval review) so they don't 400. Still OFF for a no-tool
+		// summarization, so the budget is not spent on reasoning.
+		thinkingType = "between_tools"
+	}
 	body := anthropicReq{
 		Model:         p.cfg.Model,
 		Messages:      mergeAdjacentSameRole(filterThinkingBlocks(req.Messages, thinkingEnabled)),

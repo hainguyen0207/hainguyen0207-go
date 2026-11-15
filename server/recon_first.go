@@ -292,6 +292,27 @@ func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
 		}
 		ctx, cancel := context.WithTimeout(s.ctx, reconFirstMaxWait)
 		defer cancel()
+		// HOST/DOMAIN CHI DINH: the task names an explicit, closed set of in-scope hosts
+		// (allow-list of exact hosts; no fuzzy/cidr; no subdomain-gather intent). Enumerating
+		// subdomains (02) is wasted here - run ONLY the targeted host+vhost scan (05) over the
+		// named hosts and let the agent do nuclei/dirsearch/exploit itself.
+		if reconScopeHostOnly(req) {
+			hosts := reconInScopeHosts(req)
+			if len(hosts) == 0 {
+				hosts = []string{target}
+			}
+			vars := []string{"target_hosts=" + strings.Join(hosts, ","), "vhost_all_names=true"}
+			run05, err := s.reconStartRun(ctx, target, "05-scan-hosts.yaml", vars)
+			if err != nil {
+				s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+					Summary: fmt.Sprintf("Recon (host chi dinh): 05 host/vhost scan khong khoi dong duoc (%s).", err.Error())})
+				return
+			}
+			registerPushBack(run05, t.ID)
+			s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+				Summary: fmt.Sprintf("Recon (host chi dinh): 05 host/vhost scan (run %s) - BO QUA enum subdomain; agent tu nuclei/dirsearch/exploit.", run05)})
+			return
+		}
 		// discoveryWS = workspace of the subdomain-discovery workflow (02), which
 		// writes subdomains_all.txt that the vhost matrix (05) chains off. Prefer the
 		// real discovery workflow; fall back to the first run so a custom single
@@ -333,6 +354,10 @@ func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
 		}
 		if firstWS = discoveryWS; firstWS != "" {
 			vars := []string{"subdomains_list=" + firstWS + "/subdomains_all.txt", "vhost_all_names=true"}
+			if hs := reconInScopeHosts(req); len(hs) > 0 {
+				// Sub+Host: also scan the explicitly named in-scope hosts (may be off-domain).
+				vars = append(vars, "target_hosts="+strings.Join(hs, ","))
+			}
 			run05, err := s.reconStartRun(ctx, target, "05-scan-hosts.yaml", vars)
 			if err != nil {
 				s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
@@ -497,4 +522,70 @@ func (s *Server) reconFetchBrief(ctx context.Context, runID string) (string, err
 		}
 	}
 	return string(data), nil
+}
+
+// reconScopeHostOnly reports whether a task is a "host/domain chi dinh" scope - an
+// explicit closed whitelist of specific hosts with no subdomain-gathering intent. For
+// such tasks, enumerating subdomains (02-full-recon) is wasted: we only probe + vhost
+// the named hosts (05-scan-hosts) and let the agent do nuclei/dirsearch/exploit. It
+// combines (a) positive subdomain-gather markers in the playbook text and (b) the shape
+// of the task's allow-rules (b is authoritative; a only forces broad on explicit intent).
+func reconScopeHostOnly(req createTaskReq) bool {
+	text := strings.ToLower(req.Goal + " " + req.Description)
+	// (b) allow-rule shape: a fuzzy_domain/cidr allow implies "and its subdomains / a
+	// range" -> broad; a closed set of exact hosts -> host-only.
+	var allowCount, exactCount, broadCount int
+	for _, r := range req.InterceptRules {
+		if !r.Enabled || !strings.EqualFold(strings.TrimSpace(r.Action), "allow") {
+			continue
+		}
+		allowCount++
+		switch strings.ToLower(strings.TrimSpace(r.Kind)) {
+		case "exact_domain", "exact_url", "exact_ip":
+			exactCount++
+		case "fuzzy_domain", "fuzzy_url", "fuzzy_ip", "cidr":
+			broadCount++
+		}
+	}
+	if broadCount > 0 {
+		return false
+	}
+	// (a) explicit positive subdomain-gather intent -> broad (even with exact rules).
+	for _, m := range []string{"gom subdomain", "gom het subdomain", "gom hết subdomain", "toan bo subdomain", "toàn bộ subdomain", "subdomain toan bo", "subdomain toàn bộ", "tat ca subdomain", "tất cả subdomain", "sub + host", "sub+host"} {
+		if strings.Contains(text, m) {
+			return false
+		}
+	}
+	hostMarker := strings.Contains(text, "host chi dinh") || strings.Contains(text, "host chỉ định") || strings.Contains(text, "host-chi-dinh")
+	return hostMarker || (allowCount > 0 && exactCount == allowCount)
+}
+
+// reconInScopeHosts extracts the exact in-scope host names from a task's allow-rules
+// (exact_domain / exact_ip / exact_url), lowercased and de-duplicated - the hosts the
+// targeted 05 scan runs against.
+func reconInScopeHosts(req createTaskReq) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(h string) {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" || seen[h] {
+			return
+		}
+		seen[h] = true
+		out = append(out, h)
+	}
+	for _, r := range req.InterceptRules {
+		if !r.Enabled || !strings.EqualFold(strings.TrimSpace(r.Action), "allow") {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(r.Kind)) {
+		case "exact_domain", "exact_ip":
+			add(r.Pattern)
+		case "exact_url":
+			if u, err := url.Parse(strings.TrimSpace(r.Pattern)); err == nil && u.Host != "" {
+				add(u.Hostname())
+			}
+		}
+	}
+	return out
 }

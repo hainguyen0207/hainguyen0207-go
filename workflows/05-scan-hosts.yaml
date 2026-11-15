@@ -17,7 +17,7 @@ vars:
   # non-resolving name / IP is left untested; the step's 30m timeout still bounds it.
   # parallel probes for the vhost matrix (xargs -P). Higher = faster sweep.
   vhost_parallel: '80'
-  vhost_max_names: '200'
+  vhost_max_names: '2000'
   vhost_max_ips: '80'
   # true (default) -> sweep EVERY in-scope name — BOTH resolving ("alive") and
   # non-resolving ("dead") — against the IP set, because an alive name can still be
@@ -47,7 +47,7 @@ steps:
     depends_on:
     - seed_hosts
     shell: true
-    timeout: 15m
+    timeout: 20m
     run: |
       touch {workspace}/subdomains_resolved.txt {workspace}/resolved.txt {workspace}/unresolved_hosts.txt
       test -s {workspace}/scan_hosts.txt || exit 0
@@ -59,17 +59,25 @@ steps:
       # SOFT recheck (disposition): a name that failed the bulk pass is often
       # SERVFAIL/timeout, NOT truly dead. Recheck each on 3 public resolvers before
       # calling it unresolved -> fewer false "dead" names handed to the vhost matrix.
+      # PARALLELIZED (xargs -P 200): the old sequential while/dig loop timed out on
+      # large permutation sets (10k+ names). Each host emits one line: "A <ip>" if any
+      # of 3 resolvers answers, else "U <host>". One combined stream, split after, so
+      # there is no concurrent-append race on the output files.
       : > {workspace}/unresolved_hosts.txt
-      while read n; do
-        [ -n "$n" ] || continue
-        got=""
-        for srv in 8.8.8.8 1.0.0.1 9.9.9.9; do
-          v=$(dig +short +time=3 +tries=1 "$n" A "@$srv" 2>/dev/null | grep -E '^[0-9]+\.' | head -1)
-          [ -n "$v" ] && { echo "$v" >> {workspace}/resolved.txt; got=1; break; }
-        done
-        [ -z "$got" ] && echo "$n" >> {workspace}/unresolved_hosts.txt
-      done < {workspace}/.soft
+      sort -u {workspace}/.soft | grep -v '^[[:space:]]*$' \
+        | xargs -P 200 -n 1 sh -c '
+            n="$1"
+            for srv in 8.8.8.8 1.0.0.1 9.9.9.9; do
+              v=$(dig +short +time=3 +tries=1 "$n" A "@$srv" 2>/dev/null | grep -E "^[0-9]+[.]" | head -1)
+              [ -n "$v" ] && { printf "A %s\n" "$v"; exit 0; }
+            done
+            printf "U %s\n" "$n"
+          ' _ > {workspace}/.recheck 2>/dev/null || true
+      awk '$1=="A"{print $2}' {workspace}/.recheck >> {workspace}/resolved.txt
+      awk '$1=="U"{print $2}' {workspace}/.recheck >> {workspace}/unresolved_hosts.txt
+      rm -f {workspace}/.recheck
       sort -u -o {workspace}/resolved.txt {workspace}/resolved.txt
+      sort -u -o {workspace}/unresolved_hosts.txt {workspace}/unresolved_hosts.txt
       cp {workspace}/scan_hosts.txt {workspace}/subdomains_resolved.txt
       rm -f {workspace}/.dnsx {workspace}/.resolved_names {workspace}/.soft
       printf '[resolve] %s IPs | %s hosts | %s unresolved after soft-recheck (-> vhost matrix)\n' \
