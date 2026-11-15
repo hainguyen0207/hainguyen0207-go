@@ -22,7 +22,7 @@ set -euo pipefail
 # sudo's secure_path (Kali/Debian) omits /usr/local/bin — Go + recon tools live there.
 export PATH="/usr/local/go/bin:/usr/local/bin:${PATH}"
 
-SRC="${SRC:-/opt/hainguyen0207-src}"
+SRC="${SRC:-$(cd "$(dirname "$0")/.." && pwd)}"
 BASE="${HAINGUYEN0207_BASE:-/opt/hainguyen0207}"
 SERVICE="${SERVICE:-hainguyen0207-go}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
