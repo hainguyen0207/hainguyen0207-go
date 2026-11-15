@@ -256,10 +256,54 @@ def import_kev(db, json_path):
     db.commit()
     return added, skipped, bad
 
+def import_msf(db, root):
+    import re, glob
+    pid = get_project(db, "metasploit-framework", "WEB", "ruby")
+    seen = existing_ext_ids(db)
+    added = skipped = bad = 0
+    RANK = {"ExcellentRanking":"CRITICAL","GreatRanking":"HIGH","GoodRanking":"HIGH",
+            "NormalRanking":"MEDIUM","AverageRanking":"MEDIUM","LowRanking":"LOW","ManualRanking":"VARIES"}
+    reName = re.compile(r"""['\"]Name['\"]\s*=>\s*['\"](.+?)['\"]""")
+    reDescQ = re.compile(r"""['\"]Description['\"]\s*=>\s*%q[{\[](.*?)[}\]]""", re.S)
+    reDescS = re.compile(r"""['\"]Description['\"]\s*=>\s*['\"](.+?)['\"]""", re.S)
+    reCVE = re.compile(r"""\[\s*['\"]CVE['\"]\s*,\s*['\"]([^'\"]+)['\"]""")
+    reURL = re.compile(r"""\[\s*['\"]URL['\"]\s*,\s*['\"]([^'\"]+)['\"]""")
+    reRank = re.compile(r"""Rank['\"]?\s*=>\s*(\w+Ranking)""")
+    files = glob.glob(os.path.join(root, "exploits", "**", "*.rb"), recursive=True)           + glob.glob(os.path.join(root, "auxiliary", "**", "*.rb"), recursive=True)
+    for f in files:
+        try:
+            txt = open(f, "r", errors="ignore").read()
+            ext = "msf:" + os.path.relpath(f, root).replace(os.sep, "/").replace(".rb","")
+            if ext in seen: skipped += 1; continue
+            m = reName.search(txt)
+            name = (m.group(1) if m else os.path.basename(f)).strip()
+            dm = reDescQ.search(txt) or reDescS.search(txt)
+            desc = " ".join((dm.group(1) if dm else "").split())[:1500]
+            cves = reCVE.findall(txt)
+            urls = reURL.findall(txt)
+            rk = reRank.search(txt)
+            sev = RANK.get(rk.group(1), "VARIES") if rk else ("CRITICAL" if cves else "VARIES")
+            relp = os.path.relpath(f, root).replace(os.sep,"/")
+            category = "Using Components with Known Vulnerabilities" if cves else ("Server-Side Injection" if "exploits/" in relp else "Other")
+            sub = relp.split("/")[1] if "/" in relp else ""
+            rp = ["msf module: " + relp]
+            if cves: rp.append("CVE: " + ",".join("CVE-"+c for c in cves[:5]))
+            if rk: rp.append("rank: " + rk.group(1))
+            if urls: rp.append("ref: " + urls[0])
+            rp.append("use with: msfconsole -> use " + relp.replace(".rb",""))
+            insert_issue(db, pid, name, category, sub[:200], sev, desc, "\n".join(rp)[:1800], ext,
+                         {"src":"msf","path":relp,"cve":cves})
+            seen.add(ext); added += 1
+            if added % 2000 == 0: db.commit(); print("  ...%d added" % added)
+        except Exception:
+            bad += 1
+    db.commit()
+    return added, skipped, bad
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", required=True)
-    ap.add_argument("--source", required=True, choices=["nuclei","generic","exploitdb","kev"])
+    ap.add_argument("--source", required=True, choices=["nuclei","generic","exploitdb","kev","msf"])
     ap.add_argument("--input", required=True)
     ap.add_argument("--project", default="")
     ap.add_argument("--platform", default="WEB")
@@ -273,6 +317,8 @@ def main():
         added, skipped, bad = import_exploitdb(db, a.input)
     elif a.source == "kev":
         added, skipped, bad = import_kev(db, a.input)
+    elif a.source == "msf":
+        added, skipped, bad = import_msf(db, a.input)
     else:
         added, skipped, bad = import_generic(db, a.input, a.project, a.platform)
     total = db.execute("SELECT count(*) FROM issues").fetchone()[0]
