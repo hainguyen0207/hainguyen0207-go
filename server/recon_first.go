@@ -292,8 +292,13 @@ func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
 		}
 		ctx, cancel := context.WithTimeout(s.ctx, reconFirstMaxWait)
 		defer cancel()
-		var firstWS string
-		for i, wf := range s.resolveReconWorkflows(ctx, strings.TrimSpace(req.ReconWorkflow)) {
+		// discoveryWS = workspace of the subdomain-discovery workflow (02), which
+		// writes subdomains_all.txt that the vhost matrix (05) chains off. Prefer the
+		// real discovery workflow; fall back to the first run so a custom single
+		// workflow still chains. Guards against the "all" spec picking a non-discovery
+		// workflow as i==0.
+		var discoveryWS, firstWS string
+		for _, wf := range s.resolveReconWorkflows(ctx, strings.TrimSpace(req.ReconWorkflow)) {
 			runID, err := s.reconStartRun(ctx, target, wf, maxWorkflowVars(ctx, wf))
 			if err != nil {
 				s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
@@ -311,13 +316,22 @@ func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
 				}
 				continue
 			}
-			if i == 0 {
-				firstWS = s.reconRunWorkspace(ctx, runID)
+			if ws := s.reconRunWorkspace(ctx, runID); ws != "" {
+				if firstWS == "" {
+					firstWS = ws
+				}
+				if strings.EqualFold(wf, defaultReconWorkflow) {
+					discoveryWS = ws
+				}
 			}
 		}
 		// Chain workflow 05 (active VHOST MATRIX: sweep names x IPs → live vhosts +
-		// port-scan) off the discovery run's full subdomain list, then push back.
-		if firstWS != "" {
+		// port-scan) off the discovery run's full subdomain list, then push back. Use
+		// the discovery workflow's workspace when it ran; otherwise best-effort first.
+		if discoveryWS == "" {
+			discoveryWS = firstWS
+		}
+		if firstWS = discoveryWS; firstWS != "" {
 			vars := []string{"subdomains_list=" + firstWS + "/subdomains_all.txt", "vhost_all_names=true"}
 			run05, err := s.reconStartRun(ctx, target, "05-scan-hosts.yaml", vars)
 			if err != nil {
