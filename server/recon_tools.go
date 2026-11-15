@@ -262,6 +262,7 @@ func reconTools() []actool.CoreTool {
 		reconListRuns(),
 		reconStopWorkflow(),
 		reconGraphNote(),
+		reconVulnKB(),
 	}
 }
 
@@ -271,7 +272,7 @@ func reconTools() []actool.CoreTool {
 // and is readable later. With no node it LISTS the target's annotations.
 func reconGraphNote() actool.CoreTool {
 	return actool.Build(actool.Spec{
-		Name: "graph_note",
+		Name:        "graph_note",
 		Description: "Write a NOTE and/or priority TAG back onto a graph node so the lead persists (shown in the graph viewer, survives compaction, readable later). Record a lead on a node — e.g. node=h:admin.example.com, tag=priority, note='login panel, default-cred + SQLi candidate'. Node ids come from recon_graph (h:host, ip:1.2.3.4, u:url, p:param, f:finding…). Empty tag AND note on an existing node deletes its annotation. With NO node, it LISTS every annotation for the target (recover your own pinned leads after a compaction). recon_graph reads the surface; graph_note is how you mark it.",
 		Schema: rtObj(map[string]any{
 			"target": rtStr("the target host/domain the node belongs to, e.g. example.com"),

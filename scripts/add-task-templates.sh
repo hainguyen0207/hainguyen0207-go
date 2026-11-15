@@ -79,6 +79,7 @@ khả năng phát hiện của blue team. Làm theo PHASE 1->6; INVARIANTS dư�
 6. FINDING chuẩn HACKERONE: report_finding CHỈ cho cái đã VERIFY 2x + có PoC RÕ RÀNG TÁI-LẬP-ĐƯỢC (STEPS TO REPRODUCE đánh số, copy-paste chạy lại ra đúng kết quả) + đủ title/severity/CWE/CVSS/impact/evidence/traffic/remediation (format đầy đủ ở PHASE 3). KHÔNG PoC rõ / thiếu steps = KHÔNG report.
 7. SKILL (chi tiết sống Ở ĐÂY — prompt này bị decompose, đừng chỉ dựa vào nó): methodology/catalogue/payload nằm trong skill -> load_skill TRƯỚC mỗi mảng việc (list_skills để xem). Operator chèn chỉ-dẫn giữa chừng -> ĐỌC + TUÂN ngay. Lưu NGAY rồi BỎ output thô khỏi context.
 8. PHỦ ĐỦ LỚP LỖ HỔNG: mỗi asset web phải đối chiếu VULN CATALOGUE (skill web-pentest/references/vuln-catalogue.md); mỗi lớp lỗ áp-dụng-được = terminal state (tested | reasoned-negative | out-of-scope). Không bỏ lớp nào mà không có lý do ghi lại.
+- query_vuln_kb(tech/bug-class, vd "jwt alg none", "idor order id", "graphql introspection"): tra ve bien the lo da disclosed that + cach tai hien tu kho ~51k report. Dung SAU fingerprint de soi them (tham khao, tu VERIFY, KHONG thay catalogue).
 KHÔNG: spawn_task · chạy ẩn/im lặng · report thiếu PoC · re-scan cái đã map · tự nới scope · DoS/phá hoại production · bỏ lớp lỗ trong VULN CATALOGUE (skill web-pentest) mà không lý do.
 TOOL MAP: recon->run_workflow · theo run->run_status+run_log · bản đồ->recon_graph · tái dùng->recon_findings/recon_assets · run cũ->recon_runs · worker/domain->add_intent · giám sát->get_task_graph+get_task_worker_trace · ghi->record_fact/insert_assets · finding->report_finding · scope mới->create_target · ghim lead->graph_note · skill->list_skills/load_skill · client-side taint/DOM XSS->web-pentest + Burp DOM Invader/jsluice/dalfox.
 
@@ -223,6 +224,7 @@ Phạm vi lấy từ ô In-scope; vùng cấm ở Out-of-scope (đã chặn cứ
 ## PHASE 4 — KHAI THÁC (mỗi host — đối chiếu ĐỦ lớp lỗ)
 - JS RECON SÂU: tải mọi .js + *.js.map, dựng source (sourcemapper), trích MỌI endpoint/route/API-path/param/secret (linkfinder/jsluice/katana -jc). upsert_endpoint_asset (source=js).
 - ĐỐI CHIẾU TOÀN BỘ VULN CATALOGUE (load_skill web-pentest → references/vuln-catalogue.md) trên TỪNG endpoint: broken access control/IDOR/BOLA, SSRF, injection (SQLi/SSTI/command/NoSQL/LDAP), auth/JWT/OAuth, file upload, XXE, deserialization, business logic, mass-assignment, open redirect, CORS/CSP/SOP, race condition, path traversal/LFI. Mỗi lớp áp-dụng-được → terminal (tested | reasoned-negative | out-of-scope); không bỏ lớp nào không lý do.
+- query_vuln_kb(tech/bug-class, vd "jwt alg none", "idor order id", "graphql introspection"): tra ve bien the lo da disclosed that + cach tai hien tu kho ~51k report. Dung SAU fingerprint de soi them (tham khao, tu VERIFY, KHONG thay catalogue).
 - MA TRẬN AUTH mỗi endpoint: unauth · self-user · user#2 (cross-account) · admin × mỗi method (GET/POST/PUT/DELETE/PATCH/OPTIONS) × param (arjun/x8 fuzz).
 - DOM XSS / client-side taint: test mọi cặp source→sink (dalfox --mining-dom --deep-domxss, Burp DOM Invader). Bypass: WAF (encoding/case/comment/chunked), 401/403 (path-case, %2e, ..;/, header X-Original-URL), filter, rate-limit (chứng minh bằng SỐ HỌC + keying matrix, KHÔNG brute thật). Chain nhiều bug nhỏ → RCE/ATO/full-read.
 
@@ -284,6 +286,7 @@ In-scope gồm (các) domain gốc (gom hết subdomain) VÀ các host/URL chỉ
 ## PHASE 3 — KHAI THÁC (mỗi host — đối chiếu ĐỦ lớp lỗ)
 - JS RECON: tải mọi .js + *.js.map → sourcemapper → trích endpoint/param/secret (linkfinder/jsluice/katana -jc) → upsert_endpoint_asset. Lấy swagger/openapi/graphql/.well-known.
 - ĐỐI CHIẾU TOÀN BỘ VULN CATALOGUE (load_skill web-pentest → references/vuln-catalogue.md) trên TỪNG endpoint: broken access control/IDOR/BOLA, SSRF, injection (SQLi/SSTI/command/NoSQL), auth/JWT/OAuth, file upload, XXE, deserialization, business logic, mass-assignment, open redirect, CORS/CSP, race condition, path traversal/LFI. Mỗi lớp áp-dụng-được → terminal (tested | reasoned-negative | out-of-scope).
+- query_vuln_kb(tech/bug-class, vd "jwt alg none", "idor order id", "graphql introspection"): tra ve bien the lo da disclosed that + cach tai hien tu kho ~51k report. Dung SAU fingerprint de soi them (tham khao, tu VERIFY, KHONG thay catalogue).
 - MA TRẬN AUTH mỗi endpoint: unauth · self-user · user#2 (cross-account) · admin × mỗi method × param (arjun/x8). DOM XSS (dalfox --mining-dom, Burp DOM Invader). BYPASS: WAF, 401/403, filter, rate-limit (số học), CORS/CSP. Chain bug → RCE/ATO/full-read.
 
 ## PHASE 4 — FINDING (chuẩn — bắt buộc)
