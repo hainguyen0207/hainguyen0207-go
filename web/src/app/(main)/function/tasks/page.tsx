@@ -3363,16 +3363,6 @@ function CreateTaskSheet({
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="goal">{swt("interface.m0523")}</Label>
-              <Textarea
-                id="goal"
-                className="min-h-32"
-                placeholder={swt("interface.m1036")}
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
               <Label htmlFor="scope">In-scope (mỗi dòng 1 domain/host/URL)</Label>
               <Textarea
                 id="scope"
