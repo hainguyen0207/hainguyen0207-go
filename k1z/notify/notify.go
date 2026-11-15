@@ -67,7 +67,7 @@ func RunFinished(st *store.Store, run *store.Run, status string) {
 	} else if !run.StartedAt.IsZero() {
 		duration = time.Since(run.StartedAt).Round(time.Second).String()
 	}
-	title := fmt.Sprintf("%s k1nzr3c0n · %s", icon, strings.ToUpper(status))
+	title := fmt.Sprintf("%s hainguyen0207 · %s", icon, strings.ToUpper(status))
 	fields := []field{
 		{"Target", fmt.Sprintf("**%s**", run.Target), true},
 		{"Workflow", fmt.Sprintf("`%s`", run.Workflow), true},
@@ -85,7 +85,7 @@ func RunFinished(st *store.Store, run *store.Run, status string) {
 				"title":       title,
 				"description": desc.String(),
 				"color":       icolor,
-				"footer":      map[string]string{"text": "k1nzr3c0n"},
+				"footer":      map[string]string{"text": "hainguyen0207"},
 			}},
 		})
 	} else {
@@ -97,7 +97,7 @@ func RunFinished(st *store.Store, run *store.Run, status string) {
 		}
 		send(map[string]any{
 			"username":    config.WebhookUsername(),
-			"attachments": []map[string]any{{"title": title, "text": strings.ReplaceAll(desc.String(), "**", ""), "fields": slackFields, "color": color, "footer": "k1nzr3c0n"}},
+			"attachments": []map[string]any{{"title": title, "text": strings.ReplaceAll(desc.String(), "**", ""), "fields": slackFields, "color": color, "footer": "hainguyen0207"}},
 		})
 	}
 }
@@ -117,7 +117,7 @@ func NewAssets(target, runID, workflow string, hosts []string) {
 	if len(hosts) > 15 {
 		b.WriteString(fmt.Sprintf("… and %d more", len(hosts)-15))
 	}
-	title := fmt.Sprintf("🆕 k1nzr3c0n · %d NEW ASSETS", len(hosts))
+	title := fmt.Sprintf("🆕 hainguyen0207 · %d NEW ASSETS", len(hosts))
 	sendMessage(title, b.String(), true)
 }
 
@@ -128,7 +128,7 @@ func CriticalFindings(crit, high int, rows []string) {
 	for _, r := range rows {
 		b.WriteString(r + "\n")
 	}
-	sendMessage(fmt.Sprintf("🚨 k1nzr3c0n · CRITICAL/HIGH FINDINGS"), b.String(), false)
+	sendMessage(fmt.Sprintf("🚨 hainguyen0207 · CRITICAL/HIGH FINDINGS"), b.String(), false)
 }
 
 func sendMessage(title, body string, ok bool) {
@@ -142,7 +142,7 @@ func sendMessage(title, body string, ok bool) {
 				"title":       title,
 				"description": body,
 				"color":       color,
-				"footer":      map[string]string{"text": "k1nzr3c0n"},
+				"footer":      map[string]string{"text": "hainguyen0207"},
 			}},
 		})
 	} else {
@@ -152,7 +152,7 @@ func sendMessage(title, body string, ok bool) {
 		}
 		send(map[string]any{
 			"username":    config.WebhookUsername(),
-			"attachments": []map[string]any{{"title": title, "text": strings.ReplaceAll(body, "**", ""), "color": color, "footer": "k1nzr3c0n"}},
+			"attachments": []map[string]any{{"title": title, "text": strings.ReplaceAll(body, "**", ""), "color": color, "footer": "hainguyen0207"}},
 		})
 	}
 }

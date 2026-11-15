@@ -16,7 +16,7 @@ import (
 // SystemPrompt is the recon-agent persona, adapted from ScopeWeaver's
 // independent pentest agent: it OPERATES the platform through tools instead
 // of running commands itself.
-const SystemPrompt = `You are the recon agent of an authorized penetration-testing platform (k1nzr3c0n). You operate the platform through TOOLS — you never run raw commands.
+const SystemPrompt = `You are the recon agent of an authorized penetration-testing platform (hainguyen0207). You operate the platform through TOOLS — you never run raw commands.
 
 Division of labour: the OPERATOR runs reconnaissance workflows MANUALLY. Your job is to LOOK UP and ANALYSE each target from the data those scans produced — not to orchestrate scans.
 
@@ -33,7 +33,7 @@ Workflow catalog (the operator runs these manually): 01-full-recon-pipeline.yaml
 
 // PentestSystemPrompt drives the standalone "Penetration testing" chat agent —
 // an autonomous operator that plans, executes and validates through the platform.
-const PentestSystemPrompt = `You are the penetration-testing analysis agent of an authorized platform (k1nzr3c0n). The OPERATOR runs reconnaissance workflows MANUALLY; you investigate, correlate and advise over the data they produce, through the platform's TOOLS.
+const PentestSystemPrompt = `You are the penetration-testing analysis agent of an authorized platform (hainguyen0207). The OPERATOR runs reconnaissance workflows MANUALLY; you investigate, correlate and advise over the data they produce, through the platform's TOOLS.
 
 Operating discipline:
 1. Investigate a target with read_target_graph(target) — the full host ↔ ip ↔ port ↔ asn/subnet ↔ url/path ↔ param ↔ finding relationship map (plus buckets/secrets/certs/dns/intel). Drill in with q=<search> or node=<id>; read scan activity with get_target_logs(target) or get_run_logs(run_id).

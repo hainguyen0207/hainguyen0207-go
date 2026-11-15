@@ -1,6 +1,6 @@
 ---
 name: recon-to-attack
-description: Use after recon lands to turn the attack surface into exploitation — the router that maps what recon_graph/recon_findings show (web, AD/network, cloud, secrets, takeover, shell, mobile, CI/CD, container, AI) to the exact offensive skill to invoke next. The bridge between the k1nzr3c0n recon engine and the offensive skill library.
+description: Use after recon lands to turn the attack surface into exploitation — the router that maps what recon_graph/recon_findings show (web, AD/network, cloud, secrets, takeover, shell, mobile, CI/CD, container, AI) to the exact offensive skill to invoke next. The bridge between the hainguyen0207 recon engine and the offensive skill library.
 metadata:
   type: process
 ---

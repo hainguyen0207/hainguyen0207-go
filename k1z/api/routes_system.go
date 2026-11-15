@@ -36,7 +36,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		checks["dns"] = map[string]any{"ok": true}
 	}
 	// worker (in-process — always up when this handler runs)
-	checks["worker"] = map[string]any{"ok": true, "workers": []string{"k1nzr3c0n-go"}}
+	checks["worker"] = map[string]any{"ok": true, "workers": []string{"hainguyen0207-go"}}
 	// redis: replaced by the in-process bus — always healthy when serving
 	checks["redis"] = map[string]any{"ok": true}
 	// beat
@@ -295,9 +295,9 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 
 // handleUpdateCheck queries the GitHub latest release.
 func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
-	repo := os.Getenv("K1NZR3C0N_UPDATE_REPO")
+	repo := os.Getenv("HAINGUYEN0207_UPDATE_REPO")
 	if repo == "" {
-		repo = "kienzx203/k1nzr3c0n-go"
+		repo = "hainguyen0207/hainguyen0207-go"
 	}
 	resp, err := http.Get("https://api.github.com/repos/" + repo + "/releases/latest")
 	if err != nil {
@@ -333,7 +333,7 @@ func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
 // handleSelfUpdate downloads the release binary and atomically replaces the
 // running executable (rename swap — safe while executing). Caller restarts.
 func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
-	check, err := http.Get("https://api.github.com/repos/" + envOrDefault("K1NZR3C0N_UPDATE_REPO", "kienzx203/k1nzr3c0n-go") + "/releases/latest")
+	check, err := http.Get("https://api.github.com/repos/" + envOrDefault("HAINGUYEN0207_UPDATE_REPO", "hainguyen0207/hainguyen0207-go") + "/releases/latest")
 	if err != nil {
 		writeDetail(w, 502, err.Error())
 		return
@@ -411,7 +411,7 @@ func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"updated": true, "rollback_available": true,
-		"note": "restart the service: systemctl restart k1nzr3c0n-go"})
+		"note": "restart the service: systemctl restart hainguyen0207-go"})
 }
 
 // canLaunch reports whether the staged binary can start at all.
@@ -464,7 +464,7 @@ func (s *Server) handleUpdateRollback(w http.ResponseWriter, r *http.Request) {
 	os.Chmod(exe, 0o755)
 	_ = os.Remove(old)
 	writeJSON(w, 200, map[string]any{"rolled_back": true,
-		"note": "restart the service: systemctl restart k1nzr3c0n-go"})
+		"note": "restart the service: systemctl restart hainguyen0207-go"})
 }
 
 // handleLocalLLMGet / Set — the opt-in "local-only LLM network" setting.
@@ -526,13 +526,13 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(tmpDir)
-	snap := filepath.Join(tmpDir, "k1nzr3c0n.db")
+	snap := filepath.Join(tmpDir, "hainguyen0207.db")
 	if _, err := s.St.Exec("VACUUM INTO ?", snap); err != nil {
 		writeDetail(w, 500, "snapshot: "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"k1nzr3c0n-backup-%s.tar.gz\"", time.Now().Format("20060102-150405")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"hainguyen0207-backup-%s.tar.gz\"", time.Now().Format("20060102-150405")))
 	gz := gzip.NewWriter(w)
 	defer gz.Close()
 	tw := tar.NewWriter(gz)
@@ -552,7 +552,7 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 		defer f.Close()
 		io.Copy(tw, f)
 	}
-	addFile(snap, "k1nzr3c0n.db")
+	addFile(snap, "hainguyen0207.db")
 	filepath.Walk(filepath.Join(config.BaseDir(), "workflows"), func(p string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && !strings.HasPrefix(info.Name(), ".") {
 			rel, _ := filepath.Rel(config.BaseDir(), p)
@@ -589,7 +589,7 @@ func workspaceUsage() (int, int64) {
 			return nil
 		}
 		base := filepath.Base(path)
-		if !info.IsDir() && base != "k1nzr3c0n.db" && base != "k1nzr3c0n.db-wal" && base != "k1nzr3c0n.db-shm" {
+		if !info.IsDir() && base != "hainguyen0207.db" && base != "hainguyen0207.db-wal" && base != "hainguyen0207.db-shm" {
 			if !info.IsDir() {
 				total += info.Size()
 			}
@@ -653,7 +653,7 @@ func wipeRunWorkspaces() (int, int64) {
 	var freed int64
 	for _, e := range entries {
 		name := e.Name()
-		if name == "k1nzr3c0n.db" || name == "k1nzr3c0n.db-wal" || name == "k1nzr3c0n.db-shm" {
+		if name == "hainguyen0207.db" || name == "hainguyen0207.db-wal" || name == "hainguyen0207.db-shm" {
 			continue
 		}
 		path := filepath.Join(root, name)

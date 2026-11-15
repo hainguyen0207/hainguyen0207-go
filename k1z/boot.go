@@ -1,4 +1,4 @@
-// Package k1z boots k1nzr3c0n's workflow-runner backend (its own SQLite store +
+// Package k1z boots hainguyen0207's workflow-runner backend (its own SQLite store +
 // runner + scheduler) so it can be mounted inside the ScopeWeaver binary. Its
 // routes live under /api/v1/* and /ws/*; ScopeWeaver owns everything else.
 package k1z
@@ -24,7 +24,7 @@ import (
 	"github.com/Autumn-27/artex/k1z/store"
 )
 
-// BuildHandler initializes the k1nzr3c0n backend and returns an http.Handler for
+// BuildHandler initializes the hainguyen0207 backend and returns an http.Handler for
 // its /api/v1/* + /ws/* routes plus a shutdown func. On error the ScopeWeaver
 // server still runs; the workflow-runner features are simply unavailable.
 func BuildHandler(ctx context.Context) (http.Handler, func(), error) {
@@ -89,7 +89,7 @@ func BuildHandler(ctx context.Context) (http.Handler, func(), error) {
 	return srv.Handler(), shutdown, nil
 }
 
-// Mount returns a handler that routes k1nzr3c0n's paths to k1zHandler and
+// Mount returns a handler that routes hainguyen0207's paths to k1zHandler and
 // everything else to the ScopeWeaver handler.
 func Mount(sw http.Handler, k1zHandler http.Handler) http.Handler {
 	if k1zHandler == nil {

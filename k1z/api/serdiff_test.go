@@ -13,7 +13,7 @@ func TestSerializerDifferential(t *testing.T) {
 	if os.Getenv("K1Z_DIFF") == "" {
 		t.Skip("set K1Z_DIFF=1")
 	}
-	st, err := store.Open("/tmp/opencode/serdiff/runs/k1nzr3c0n.db")
+	st, err := store.Open("/tmp/opencode/serdiff/runs/hainguyen0207.db")
 	if err != nil {
 		t.Fatal(err)
 	}

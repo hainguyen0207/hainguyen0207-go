@@ -18,8 +18,8 @@ function ApiTokenCard() {
           <h3 className="section-title">API Access Token</h3>
           <p className="text-[11px] mt-1" style={{ color: 'var(--text-2)' }}>
             {status.auth_required
-              ? 'Server auth is ON (K1NZR3C0N_API_TOKEN) — this browser must send the matching token.'
-              : 'Server auth is OFF — set K1NZR3C0N_API_TOKEN in /opt/k1nzr3c0n/.env to require a bearer token.'}
+              ? 'Server auth is ON (HAINGUYEN0207_API_TOKEN) — this browser must send the matching token.'
+              : 'Server auth is OFF — set HAINGUYEN0207_API_TOKEN in /opt/hainguyen0207/.env to require a bearer token.'}
           </p>
         </div>
         <div className="flex gap-2 items-center">

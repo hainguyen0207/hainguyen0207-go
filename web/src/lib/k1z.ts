@@ -1,4 +1,4 @@
-// Client helper for k1nzr3c0n's workflow-runner backend, mounted at /api/v1/*.
+// Client helper for hainguyen0207's workflow-runner backend, mounted at /api/v1/*.
 function token(): string {
   try {
     return (typeof window !== "undefined" && localStorage.getItem("artex_token")) || "";

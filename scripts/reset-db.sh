@@ -22,18 +22,18 @@
 #   sudo ARTEX_PASSWORD='yourpass' bash scripts/reset-db.sh            # full reset + reseed
 #   sudo ARTEX_PASSWORD='yourpass' bash scripts/reset-db.sh -y         # no confirm prompt
 #   sudo bash scripts/reset-db.sh --no-backup                         # skip pg_dump
-#   DBNAME=artex SERVICE=k1nzr3c0n-go BASE_URL=http://127.0.0.1:8000 \
+#   DBNAME=artex SERVICE=hainguyen0207-go BASE_URL=http://127.0.0.1:8000 \
 #     sudo ARTEX_PASSWORD=... bash scripts/reset-db.sh
 #
 # Env / flags:
 #   ARTEX_PASSWORD   admin password to re-init + login for reseed (skip both if unset)
 #   ARTEX_USER       admin username for reseed login (default ARTEX)
 #   DBNAME           database + app role name        (default artex)
-#   SERVICE          systemd unit                    (default k1nzr3c0n-go)
+#   SERVICE          systemd unit                    (default hainguyen0207-go)
 #   BASE_URL         API base for health/init/reseed (default http://127.0.0.1:8000)
 #   PG_CONTAINER     docker postgres container       (default artex-pg)
 #   PG_SUPERUSER     superuser role inside postgres  (default = DBNAME, fallback postgres)
-#   SRC              source dir holding scripts/      (default /opt/k1nzr3c0n-src, else this repo)
+#   SRC              source dir holding scripts/      (default /opt/hainguyen0207-src, else this repo)
 #   -y|--yes         do not prompt for confirmation
 #   --no-backup      skip the pg_dump backup
 #   --no-service     do not stop/start systemd (you manage the process yourself)
@@ -42,12 +42,12 @@
 set -euo pipefail
 
 DBNAME="${DBNAME:-artex}"
-SERVICE="${SERVICE:-k1nzr3c0n-go}"
+SERVICE="${SERVICE:-hainguyen0207-go}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
 PG_CONTAINER="${PG_CONTAINER:-artex-pg}"
 PG_SUPERUSER="${PG_SUPERUSER:-}"
 ARTEX_USER="${ARTEX_USER:-ARTEX}"
-SRC="${SRC:-/opt/k1nzr3c0n-src}"
+SRC="${SRC:-/opt/hainguyen0207-src}"
 [ -d "$SRC" ] || SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 ASSUME_YES=0; DO_BACKUP=1; DO_SERVICE=1; DO_RESEED=1

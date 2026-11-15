@@ -7,7 +7,7 @@ import (
 
 // ScopeWeaver UI adapter: the embedded ScopeWeaver frontend calls /api/* (no
 // /v1). These handlers answer the boot + core endpoints with ScopeWeaver-shaped
-// responses backed by k1nzr3c0n's store, so its real UI renders live data.
+// responses backed by hainguyen0207's store, so its real UI renders live data.
 
 func (s *Server) mountSWAdapter(m *http.ServeMux) {
 	m.HandleFunc("GET /api/auth/status", s.swAuthStatus)
@@ -28,11 +28,11 @@ func (s *Server) swAuthStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) swUserMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"username": "k1nzr3c0n", "authenticated": true})
+	writeJSON(w, 200, map[string]any{"username": "hainguyen0207", "authenticated": true})
 }
 
 func (s *Server) swUsers(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"users": []any{map[string]any{"username": "k1nzr3c0n"}}, "total": 1})
+	writeJSON(w, 200, map[string]any{"users": []any{map[string]any{"username": "hainguyen0207"}}, "total": 1})
 }
 
 func (s *Server) swHealth(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +40,7 @@ func (s *Server) swHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) swVersion(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{"version": BuildVersion, "name": "k1nzr3c0n"})
+	writeJSON(w, 200, map[string]any{"version": BuildVersion, "name": "hainguyen0207"})
 }
 
 func (s *Server) swUpdateCheck(w http.ResponseWriter, r *http.Request) {

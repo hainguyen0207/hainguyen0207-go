@@ -15,6 +15,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -74,10 +75,10 @@ type Wordlist struct {
 	ExtractGlob string
 }
 
-// binDirPath returns the install directory (K1NZR3C0N_BIN_DIR override,
+// binDirPath returns the install directory (HAINGUYEN0207_BIN_DIR override,
 // default /usr/local/bin — Python parity).
 func binDirPath() string {
-	if v := os.Getenv("K1NZR3C0N_BIN_DIR"); v != "" {
+	if v := os.Getenv("HAINGUYEN0207_BIN_DIR"); v != "" {
 		return v
 	}
 	return "/usr/local/bin"
@@ -153,7 +154,7 @@ func download(ctx context.Context, url, dest string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "k1nzr3c0n-go/3")
+	req.Header.Set("User-Agent", "hainguyen0207-go/3")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -214,13 +215,132 @@ type ghRelease struct {
 	Assets  []ghAsset `json:"assets"`
 }
 
+// ghRelCache memoises release lookups so repeated Check/Update clicks don't burn
+// the unauthenticated GitHub API quota (60 req/h — one full check is ~50 calls).
+var (
+	ghRelCacheMu sync.Mutex
+	ghRelCache   = map[string]ghRelCacheEntry{}
+)
+
+type ghRelCacheEntry struct {
+	rel *ghRelease
+	at  time.Time
+}
+
+const ghRelCacheTTL = 30 * time.Minute
+
+// ghReleaseFetch resolves the latest release of repo: cache → REST API →
+// github.com web fallback (not subject to the API rate limit).
 func ghReleaseFetch(ctx context.Context, repo string) (*ghRelease, error) {
+	ghRelCacheMu.Lock()
+	if e, ok := ghRelCache[repo]; ok && time.Since(e.at) < ghRelCacheTTL {
+		ghRelCacheMu.Unlock()
+		return e.rel, nil
+	}
+	ghRelCacheMu.Unlock()
+
+	rel, apiErr := ghReleaseAPI(ctx, repo)
+	if apiErr != nil {
+		var webErr error
+		rel, webErr = ghReleaseWeb(ctx, repo)
+		if webErr != nil {
+			return nil, fmt.Errorf("%v; web fallback: %v", apiErr, webErr)
+		}
+	}
+	ghRelCacheMu.Lock()
+	ghRelCache[repo] = ghRelCacheEntry{rel: rel, at: time.Now()}
+	ghRelCacheMu.Unlock()
+	return rel, nil
+}
+
+var ghAssetHrefRe = regexp.MustCompile(`href="(/[^"]+/releases/download/[^"]+)"`)
+
+// ghReleaseWeb reads the latest tag from the /releases/latest redirect and the
+// asset list from the expanded_assets fragment — same data as the API.
+func ghReleaseWeb(ctx context.Context, repo string) (*ghRelease, error) {
+	noRedirect := &http.Client{
+		Timeout:       20 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	// Follow renamed-repo 301s until GitHub answers with the /releases/tag/<tag> redirect.
+	target := "https://github.com/" + repo + "/releases/latest"
+	var tagURL string
+	for hop := 0; hop < 4 && tagURL == ""; hop++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "hainguyen0207-go/3")
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		resp.Body.Close()
+		loc := resp.Header.Get("Location")
+		if loc == "" {
+			return nil, fmt.Errorf("github web %s: no latest release (HTTP %d)", repo, resp.StatusCode)
+		}
+		if strings.HasPrefix(loc, "/") {
+			loc = "https://github.com" + loc
+		}
+		if strings.Contains(loc, "/releases/tag/") {
+			tagURL = loc
+		} else {
+			target = loc
+		}
+	}
+	i := strings.Index(tagURL, "/releases/tag/")
+	if i < 0 {
+		return nil, fmt.Errorf("github web %s: no latest release", repo)
+	}
+	tag := tagURL[i+len("/releases/tag/"):]
+	base := tagURL[:i] // https://github.com/<owner>/<repo> after any rename
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/releases/expanded_assets/"+tag, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "hainguyen0207-go/3")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("github web %s assets: HTTP %d", repo, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	tagName := tag
+	if u, err := neturl.PathUnescape(tag); err == nil {
+		tagName = u
+	}
+	rel := &ghRelease{TagName: tagName}
+	seen := map[string]bool{}
+	for _, m := range ghAssetHrefRe.FindAllStringSubmatch(string(body), -1) {
+		href := m[1]
+		if seen[href] {
+			continue
+		}
+		seen[href] = true
+		name := path.Base(href)
+		if u, err := neturl.PathUnescape(name); err == nil {
+			name = u
+		}
+		rel.Assets = append(rel.Assets, ghAsset{Name: name, BrowserDownloadURL: "https://github.com" + href})
+	}
+	return rel, nil
+}
+
+func ghReleaseAPI(ctx context.Context, repo string) (*ghRelease, error) {
 	url := "https://api.github.com/repos/" + repo + "/releases/latest"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "k1nzr3c0n-go/3")
+	req.Header.Set("User-Agent", "hainguyen0207-go/3")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
@@ -489,7 +609,20 @@ func installFirstHit(tmp, binaryName, destName string) error {
 func InstalledVersion(t *Tool) string {
 	switch t.Cat {
 	case "pip":
-		return pipVersion(t.PyPI)
+		if v := pipVersion(t.PyPI); v != "" {
+			return v
+		}
+		// apt- or pipx-installed tools are invisible to `pip3 show`;
+		// fall back to the CLI being on PATH.
+		for _, n := range []string{t.Name, t.PyPI, strings.ToLower(t.PyPI)} {
+			if n == "" {
+				continue
+			}
+			if _, err := exec.LookPath(n); err == nil {
+				return "installed"
+			}
+		}
+		return ""
 	case "git":
 		return strings.TrimSpace(sh([]string{"git", "-C", t.GitDir, "rev-parse", "--short", "HEAD"}, 10*time.Second))
 	}
@@ -656,7 +789,13 @@ func runPipUpgrade(pkg string) (string, error) {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "pip3", "install", "--upgrade", pkg, "--break-system-packages").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("%s", truncate(string(out), 400))
+		// Debian/Kali: deps owned by apt can't be uninstalled by pip
+		// (uninstall-no-record-file) — upgrade just the package itself.
+		out2, err2 := exec.CommandContext(ctx, "pip3", "install", "--upgrade", "--no-deps", "--ignore-installed", pkg, "--break-system-packages").CombinedOutput()
+		if err2 != nil {
+			return "", fmt.Errorf("%s", truncate(string(out)+"\n--- retry --no-deps:\n"+string(out2), 400))
+		}
+		return string(out2), nil
 	}
 	return string(out), nil
 }
@@ -948,9 +1087,19 @@ func CheckVersions(st *store.Store) {
 		if r.latest != "" {
 			latest := r.latest
 			tv.Latest = &latest
+			// status was computed from the binary's self-report; if the recorded
+			// (higher) version already matches latest, it isn't outdated.
+			if tv.Status == "outdated" && tv.Installed != nil && !IsOutdated(*tv.Installed, latest) {
+				tv.Status = "ok"
+			}
 		}
 		if r.url != "" {
 			tv.LatestURL = r.url
+		}
+		// a clean check supersedes any error left by an earlier failed update
+		if r.status == "ok" || r.status == "outdated" || r.status == "rebuild_only" {
+			empty := ""
+			tv.ErrorMsg = &empty
 		}
 		_ = st.UpsertToolVersion(tv)
 	}
@@ -1074,7 +1223,7 @@ func Inventory(st *store.Store) map[string]any {
 		"wordlists":          wordlists,
 		"outdated_count":     outdatedN,
 		"check_failed_count": failedN,
-		"warning":            "Updates applied in-place. Restart k1nzr3c0n-worker to pick up changes: systemctl restart k1nzr3c0n-worker",
+		"warning":            "Updates applied in-place. Restart hainguyen0207-worker to pick up changes: systemctl restart hainguyen0207-worker",
 	}
 }
 

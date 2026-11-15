@@ -1,4 +1,4 @@
-# k1nzr3c0n — Hướng dẫn sử dụng đầy đủ (ALL chức năng)
+# hainguyen0207 — Hướng dẫn sử dụng đầy đủ (ALL chức năng)
 
 > ⚠️ **Chỉ dùng hợp pháp.** Đây là công cụ tấn công. Chỉ chạy trên tài sản bạn
 > **sở hữu** hoặc **được phép bằng văn bản**. Giữ đúng phạm vi (scope) và luật.
@@ -24,7 +24,7 @@ sudo REPO_URL=https://github.com/<bạn>/<repo>.git bash scripts/install-kali.sh
 ```
 Cài: Go 1.26, Node, PostgreSQL (tạo role+db), bộ tool recon (nuclei/httpx/subfinder/
 dnsx/naabu/katana/ffuf/nmap/SecLists), (tuỳ chọn) claude CLI; dựng service systemd
-`k1nzr3c0n-go` cổng `:8000`; build backend (dùng frontend đã nhúng sẵn); hỏi đặt
+`hainguyen0207-go` cổng `:8000`; build backend (dùng frontend đã nhúng sẵn); hỏi đặt
 mật khẩu admin. Idempotent — chạy lại an toàn.
 
 Tuỳ chỉnh: `PORT`, `PG_USER/PG_PASS/PG_DB`, `ADMIN_USER/ADMIN_PASS`,
@@ -34,8 +34,8 @@ Tuỳ chỉnh: `PORT`, `PG_USER/PG_PASS/PG_DB`, `ADMIN_USER/ADMIN_PASS`,
 ```bash
 cd web && npm install && npm run build:static && cd ..
 rm -rf server/webui/dist && cp -r web/out server/webui/dist
-ARTEX_SKIP_FRONTEND=1 go build -tags embedui -o k1nzr3c0n ./cmd/artex
-ARTEX_PG_DSN='postgres://artex:artex@127.0.0.1:5432/artex?sslmode=disable' ./k1nzr3c0n -addr :8000
+ARTEX_SKIP_FRONTEND=1 go build -tags embedui -o hainguyen0207 ./cmd/artex
+ARTEX_PG_DSN='postgres://artex:artex@127.0.0.1:5432/artex?sslmode=disable' ./hainguyen0207 -addr :8000
 ```
 
 ---
@@ -176,7 +176,7 @@ có mật khẩu, trang sẽ yêu cầu khởi tạo (hoặc installer đã làm
 
 ## 6. Cập nhật / Deploy
 
-Trên server (`/opt/k1nzr3c0n-src`):
+Trên server (`/opt/hainguyen0207-src`):
 ```bash
 sudo bash scripts/deploy.sh                     # full: FE + backend + assets + restart + seed
 SKIP_FE=1 sudo bash scripts/deploy.sh           # nhanh: chỉ backend (dùng FE đã nhúng)
@@ -188,9 +188,9 @@ RESEED=1 ARTEX_PASSWORD='<mật khẩu>' sudo -E bash scripts/deploy.sh    # + n
 
 Service:
 ```bash
-systemctl status k1nzr3c0n-go
-journalctl -u k1nzr3c0n-go -f
-systemctl restart k1nzr3c0n-go
+systemctl status hainguyen0207-go
+journalctl -u hainguyen0207-go -f
+systemctl restart hainguyen0207-go
 ```
 
 **API keys passive** (cho workflow 01): `cp scripts/api-keys.env.example
@@ -207,7 +207,7 @@ scripts/api-keys.env`, điền, deploy lại (tự nạp qua `/api/v1/keys`). **
 | **Không tạo được claude-sub / `/seed` báo không có creds** | `claude` chưa login trên server, hoặc khác user chạy service. `sudo claude`, hoặc đặt `CLAUDE_CONFIG_DIR`. |
 | **Xóa profile không được** | Chỉ không xóa được profile **duy nhất**. Profile active vẫn xóa được (tự chuyển active). |
 | **Workflow bước đỏ ngay khi render** | Lỗi template: `{N}` (vd `{3}` trong regex) bị hiểu là biến. Dùng `[0-9]{1,3}\.…` (có dấu phẩy), `[0-9][0-9][0-9]`, hoặc `curl -I` thay `%{http_code}`. |
-| **Service không start** | `journalctl -u k1nzr3c0n-go -n 60` — thường PostgreSQL chưa sẵn sàng hoặc `ARTEX_PG_DSN` sai. |
+| **Service không start** | `journalctl -u hainguyen0207-go -n 60` — thường PostgreSQL chưa sẵn sàng hoặc `ARTEX_PG_DSN` sai. |
 | **Workflow passive không ra kết quả** | Thiếu API key: cấu hình `scripts/api-keys.env` rồi deploy lại. |
 | **FE không đổi sau deploy** | Quên rebuild+commit `server/webui/dist`, hoặc deploy SKIP_FE với dist cũ. |
 

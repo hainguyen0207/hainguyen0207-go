@@ -3284,7 +3284,7 @@ function HelpModal({ onClose }) {
               User Guide — Workflow Editor
             </div>
             <div style={{ fontSize: 9.5, color: 'var(--text-2)' }}>
-              k1nzr3c0n · Visual Security Workflow Builder
+              hainguyen0207 · Visual Security Workflow Builder
             </div>
           </div>
           <div style={{ flex: 1 }} />

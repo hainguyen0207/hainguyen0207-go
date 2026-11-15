@@ -60,23 +60,61 @@ func afterColon(v string) string {
 // keyCheckRecipes — validation endpoints verified live against real keys.
 // Conservative: a wrong recipe would flag a good key as expired.
 var keyCheckRecipes = map[string]keyRecipe{
-	"shodan":         {build: func(v string) *http.Request { return getReq("https://api.shodan.io/api-info?key=" + url.QueryEscape(v)) }, valid: httpOK},
-	"github":         {build: func(v string) *http.Request { return getReq("https://api.github.com/rate_limit", [2]string{"Authorization", "Bearer " + v}, [2]string{"Accept", "application/vnd.github+json"}) }, valid: httpOK},
-	"securitytrails": {build: func(v string) *http.Request { return getReq("https://api.securitytrails.com/v1/ping", [2]string{"APIKEY", v}) }, valid: httpOK},
-	"virustotal":     {build: func(v string) *http.Request { return getReq("https://www.virustotal.com/api/v3/domains/google.com", [2]string{"x-apikey", v}) }, valid: httpOK},
-	"censys":         {build: func(v string) *http.Request { return getReq("https://api.platform.censys.io/v3/global/asset/host/8.8.8.8", [2]string{"Authorization", "Bearer " + afterColon(v)}) }, valid: httpOK},
-	"urlscan":        {build: func(v string) *http.Request { return getReq("https://urlscan.io/user/quotas/", [2]string{"API-Key", v}) }, valid: httpOK},
-	"criminalip":     {build: func(v string) *http.Request { return postReq("https://api.criminalip.io/v1/user/me", [2]string{"x-api-key", v}) }, valid: httpOK},
-	"hunter":         {build: func(v string) *http.Request { return getReq("https://api.hunter.io/v2/account?api_key=" + url.QueryEscape(v)) }, valid: httpOK},
-	"binaryedge":     {build: func(v string) *http.Request { return getReq("https://api.binaryedge.io/v2/user/subscription", [2]string{"X-Key", v}) }, valid: httpOK},
-	"netlas":         {build: func(v string) *http.Request { return getReq("https://app.netlas.io/api/users/current/", [2]string{"X-API-Key", v}) }, valid: httpOK},
-	"intelx":         {build: func(v string) *http.Request { return getReq("https://free.intelx.io/authenticate/info", [2]string{"x-key", v}) }, valid: httpOK},
-	"fullhunt":       {build: func(v string) *http.Request { return getReq("https://fullhunt.io/api/v1/auth/status", [2]string{"X-API-KEY", v}) }, valid: httpOK},
-	"leakix":         {build: func(v string) *http.Request { return getReq("https://leakix.net/host/8.8.8.8", [2]string{"api-key", v}, [2]string{"Accept", "application/json"}) }, valid: httpOK},
-	"certspotter":    {build: func(v string) *http.Request { return getReq("https://api.certspotter.com/v1/issuances?domain=example.com&include_subdomains=false&expand=dns_names", [2]string{"Authorization", "Bearer " + v}) }, valid: httpOK},
-	"whoisxmlapi":    {build: func(v string) *http.Request { return getReq("https://user.whoisxmlapi.com/service/account-balance?output_format=JSON&apiKey=" + url.QueryEscape(v)) }, valid: httpOK},
-	"fofa":           {build: func(v string) *http.Request { return getReq("https://fofa.info/api/v1/info/my?email=" + url.QueryEscape(beforeColon(v)) + "&key=" + url.QueryEscape(afterColon(v))) }, valid: httpOK},
-	"bevigil":        {build: func(v string) *http.Request { return getReq("https://osint.bevigil.com/api/example.com/subdomains/", [2]string{"X-Access-Token", v}) }, valid: httpOK},
+	"shodan": {build: func(v string) *http.Request {
+		return getReq("https://api.shodan.io/api-info?key=" + url.QueryEscape(v))
+	}, valid: httpOK},
+	"github": {build: func(v string) *http.Request {
+		return getReq("https://api.github.com/rate_limit", [2]string{"Authorization", "Bearer " + v}, [2]string{"Accept", "application/vnd.github+json"})
+	}, valid: httpOK},
+	"securitytrails": {build: func(v string) *http.Request {
+		return getReq("https://api.securitytrails.com/v1/ping", [2]string{"APIKEY", v})
+	}, valid: httpOK},
+	"virustotal": {build: func(v string) *http.Request {
+		return getReq("https://www.virustotal.com/api/v3/domains/google.com", [2]string{"x-apikey", v})
+	}, valid: httpOK},
+	"censys": {build: func(v string) *http.Request {
+		return getReq("https://api.platform.censys.io/v3/global/asset/host/8.8.8.8", [2]string{"Authorization", "Bearer " + afterColon(v)})
+	}, valid: httpOK},
+	"urlscan": {build: func(v string) *http.Request {
+		return getReq("https://urlscan.io/user/quotas/", [2]string{"API-Key", v})
+	}, valid: httpOK},
+	"criminalip": {build: func(v string) *http.Request {
+		return postReq("https://api.criminalip.io/v1/user/me", [2]string{"x-api-key", v})
+	}, valid: httpOK},
+	"hunter": {build: func(v string) *http.Request {
+		return getReq("https://api.hunter.io/v2/account?api_key=" + url.QueryEscape(v))
+	}, valid: httpOK},
+	"binaryedge": {build: func(v string) *http.Request {
+		return getReq("https://api.binaryedge.io/v2/user/subscription", [2]string{"X-Key", v})
+	}, valid: httpOK},
+	"netlas": {build: func(v string) *http.Request {
+		return getReq("https://app.netlas.io/api/users/current/", [2]string{"X-API-Key", v})
+	}, valid: httpOK},
+	"intelx": {build: func(v string) *http.Request {
+		host := "free.intelx.io" // optional "host:key" form selects the paid host
+		if i := strings.LastIndex(v, ":"); i > 0 {
+			host, v = v[:i], v[i+1:]
+		}
+		return getReq("https://"+host+"/authenticate/info", [2]string{"x-key", v})
+	}, valid: httpOK},
+	"fullhunt": {build: func(v string) *http.Request {
+		return getReq("https://fullhunt.io/api/v1/auth/status", [2]string{"X-API-KEY", v})
+	}, valid: httpOK},
+	"leakix": {build: func(v string) *http.Request {
+		return getReq("https://leakix.net/host/8.8.8.8", [2]string{"api-key", v}, [2]string{"Accept", "application/json"})
+	}, valid: httpOK},
+	"certspotter": {build: func(v string) *http.Request {
+		return getReq("https://api.certspotter.com/v1/issuances?domain=example.com&include_subdomains=false&expand=dns_names", [2]string{"Authorization", "Bearer " + v})
+	}, valid: httpOK},
+	"whoisxmlapi": {build: func(v string) *http.Request {
+		return getReq("https://user.whoisxmlapi.com/service/account-balance?output_format=JSON&apiKey=" + url.QueryEscape(v))
+	}, valid: httpOK},
+	"fofa": {build: func(v string) *http.Request {
+		return getReq("https://fofa.info/api/v1/info/my?email=" + url.QueryEscape(beforeColon(v)) + "&key=" + url.QueryEscape(afterColon(v)))
+	}, valid: httpOK},
+	"bevigil": {build: func(v string) *http.Request {
+		return getReq("https://osint.bevigil.com/api/example.com/subdomains/", [2]string{"X-Access-Token", v})
+	}, valid: httpOK},
 }
 
 // handleKeyCheck validates every configured key concurrently and returns, per
@@ -102,10 +140,10 @@ func (s *Server) handleKeyCheck(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 12 * time.Second}
 
 	var (
-		mu   sync.Mutex
-		out  = []result{}
-		wg   sync.WaitGroup
-		sem  = make(chan struct{}, 6) // cap concurrency
+		mu  sync.Mutex
+		out = []result{}
+		wg  sync.WaitGroup
+		sem = make(chan struct{}, 6) // cap concurrency
 	)
 
 	for _, k := range keys {

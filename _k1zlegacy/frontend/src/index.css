@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ═════════════════════════════════════════════════════════════════════════════
-   k1nzr3c0n — design system
+   hainguyen0207 — design system
    A refined dark-first operations console. Every shared component class lives
    here so the whole app restyles from one place. Colors are exposed as CSS
    variables; the light theme overrides them under [data-theme="light"].

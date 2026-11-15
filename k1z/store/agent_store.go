@@ -182,9 +182,9 @@ CREATE TABLE IF NOT EXISTS agent_audit (
 CREATE TABLE IF NOT EXISTS notify_settings (
 	id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT CHECK (id = 1),
 	webhook_url TEXT NOT NULL DEFAULT '',
-	username TEXT NOT NULL DEFAULT 'k1nzr3c0n'
+	username TEXT NOT NULL DEFAULT 'hainguyen0207'
 );
-INSERT OR IGNORE INTO notify_settings (id, webhook_url, username) VALUES (1, '', 'k1nzr3c0n');
+INSERT OR IGNORE INTO notify_settings (id, webhook_url, username) VALUES (1, '', 'hainguyen0207');
 CREATE TABLE IF NOT EXISTS llm_usage (
 	id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	profile_id INTEGER,

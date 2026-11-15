@@ -30,7 +30,7 @@ không bao giờ lên GitHub).
 Tất cả lệnh chạy từ thư mục gốc project:
 
 ```bash
-cd /mnt/c/Users/kin/Downloads/k1nzr3c0n-go
+cd /mnt/c/Users/kin/Downloads/hainguyen0207-go
 ```
 
 ---

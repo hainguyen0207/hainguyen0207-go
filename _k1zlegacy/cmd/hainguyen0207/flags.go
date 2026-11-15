@@ -7,7 +7,7 @@ import (
 )
 
 func newFlagSet() *flag.FlagSet {
-	fs := flag.NewFlagSet("k1nzr3c0n", flag.ContinueOnError)
+	fs := flag.NewFlagSet("hainguyen0207", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	return fs
 }

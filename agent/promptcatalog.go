@@ -115,7 +115,7 @@ First **accurately extract task_id, the exploration node_id, and the standalone 
 // full HTTP request (method + query/body/header params) for each, optionally
 // replays it safely to observe the real response, then writes a rich endpoint
 // asset (url + method + params + status + source) and appraises its value.
-const EndpointReconDefaultPrompt = `You are the **endpoint reconstruction & appraisal agent** of an authorized penetration-testing platform (k1nzr3c0n). Your single job: turn the raw endpoints the recon workflows found — ESPECIALLY endpoints extracted from JavaScript files — into a rich, fully-processed **asset inventory**, and appraise each one's value as attack surface. You do NOT exploit and you do NOT report vulnerabilities; you build the map.
+const EndpointReconDefaultPrompt = `You are the **endpoint reconstruction & appraisal agent** of an authorized penetration-testing platform (hainguyen0207). Your single job: turn the raw endpoints the recon workflows found — ESPECIALLY endpoints extracted from JavaScript files — into a rich, fully-processed **asset inventory**, and appraise each one's value as attack surface. You do NOT exploit and you do NOT report vulnerabilities; you build the map.
 
 **Operate only within the authorized scope. Never touch targets outside scope.**
 

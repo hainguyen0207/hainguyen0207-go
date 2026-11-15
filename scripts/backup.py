@@ -17,30 +17,30 @@ import tempfile
 import time
 from pathlib import Path
 
-BASE = Path(os.environ.get("K1NZR3C0N_BASE", "/opt/k1nzr3c0n"))
+BASE = Path(os.environ.get("HAINGUYEN0207_BASE", "/opt/hainguyen0207"))
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Backup k1nzr3c0n DB + workflows")
-    ap.add_argument("--out", default=None, help="Output file (default: BASE/k1nzr3c0n-backup-<ts>.tar.gz)")
+    ap = argparse.ArgumentParser(description="Backup hainguyen0207 DB + workflows")
+    ap.add_argument("--out", default=None, help="Output file (default: BASE/hainguyen0207-backup-<ts>.tar.gz)")
     args = ap.parse_args()
 
     ts = time.strftime("%Y%m%d-%H%M%S")
-    out = Path(args.out) if args.out else BASE / f"k1nzr3c0n-backup-{ts}.tar.gz"
+    out = Path(args.out) if args.out else BASE / f"hainguyen0207-backup-{ts}.tar.gz"
 
     with tempfile.TemporaryDirectory() as td:
-        stage = Path(td) / "k1nzr3c0n-backup"
+        stage = Path(td) / "hainguyen0207-backup"
         stage.mkdir()
 
         # DB — checkpoint WAL first so the copied file is self-contained
-        db = BASE / "runs" / "k1nzr3c0n.db"
+        db = BASE / "runs" / "hainguyen0207.db"
         if db.exists():
             con = sqlite3.connect(str(db))
             try:
                 con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             finally:
                 con.close()
-            shutil.copy2(db, stage / "k1nzr3c0n.db")
+            shutil.copy2(db, stage / "hainguyen0207.db")
             print(f"[+] DB: {db} ({db.stat().st_size // 1024} KB)")
         else:
             print(f"[!] DB not found at {db} — skipping")
@@ -58,7 +58,7 @@ def main() -> int:
 
         out.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(out, "w:gz") as tf:
-            tf.add(stage, arcname="k1nzr3c0n-backup")
+            tf.add(stage, arcname="hainguyen0207-backup")
 
     print(f"[+] Backup written: {out} ({out.stat().st_size // 1024} KB)")
     return 0

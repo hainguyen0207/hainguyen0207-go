@@ -302,7 +302,7 @@ func (s *Server) detectWAFCDN(ctx context.Context, as *db.AssetStore, target str
 		if err != nil {
 			continue
 		}
-		req.Header.Set("User-Agent", "k1nzr3c0n-endpoint-recon/1.0")
+		req.Header.Set("User-Agent", "hainguyen0207-endpoint-recon/1.0")
 		resp, err := client.Do(req)
 		if err != nil {
 			continue
@@ -482,7 +482,7 @@ func (s *Server) syncJSEndpoints(ctx context.Context, as *db.AssetStore, target 
 		if err != nil {
 			continue
 		}
-		req.Header.Set("User-Agent", "k1nzr3c0n-endpoint-recon/1.0")
+		req.Header.Set("User-Agent", "hainguyen0207-endpoint-recon/1.0")
 		resp, err := client.Do(req)
 		if err != nil {
 			errs++
@@ -639,7 +639,7 @@ func (s *Server) toolExtractJSEndpoints() actool.CoreTool {
 			if err != nil {
 				return actool.Errorf(err.Error()), nil
 			}
-			req.Header.Set("User-Agent", "k1nzr3c0n-endpoint-recon/1.0")
+			req.Header.Set("User-Agent", "hainguyen0207-endpoint-recon/1.0")
 			resp, err := replayHTTPClient(12 * time.Second).Do(req)
 			if err != nil {
 				return actool.Errorf("fetch failed: " + err.Error()), nil
@@ -733,7 +733,7 @@ func (s *Server) toolReplayEndpoint() actool.CoreTool {
 			if err != nil {
 				return actool.Errorf(err.Error()), nil
 			}
-			req.Header.Set("User-Agent", "k1nzr3c0n-endpoint-recon/1.0")
+			req.Header.Set("User-Agent", "hainguyen0207-endpoint-recon/1.0")
 			for k, v := range a.Headers {
 				req.Header.Set(k, v)
 			}

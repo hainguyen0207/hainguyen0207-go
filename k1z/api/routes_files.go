@@ -86,7 +86,7 @@ func (s *Server) handleTargetGraph(w http.ResponseWriter, r *http.Request) {
 func graphScript() string {
 	s := filepath.Join(config.BaseDir(), "scripts", "recon-graph.py")
 	if !fileExists(s) {
-		s = "/opt/k1nzr3c0n-src/scripts/recon-graph.py"
+		s = "/opt/hainguyen0207-src/scripts/recon-graph.py"
 	}
 	return s
 }

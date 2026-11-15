@@ -882,7 +882,7 @@ func (s *Server) handleUntestedAssets(w http.ResponseWriter, r *http.Request) {
 }
 
 func captureAddr() string {
-	if v := os.Getenv("K1NZR3C0N_PROXY_ADDR"); v != "" {
+	if v := os.Getenv("HAINGUYEN0207_PROXY_ADDR"); v != "" {
 		return v
 	}
 	return "127.0.0.1:8083"

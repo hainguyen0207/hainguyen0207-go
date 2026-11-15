@@ -135,7 +135,7 @@ func licenseGateExempt(path, method string) bool {
 	return false
 }
 
-// GateK1z wraps the externally-mounted k1nzr3c0n workflow-runner handler
+// GateK1z wraps the externally-mounted hainguyen0207 workflow-runner handler
 // (/api/v1/*, /ws/*) with the SAME license gate as the ARTEX API. Without it
 // those routes bypass the gate entirely — e.g. POST /api/v1/runs could launch
 // workflows on an unlicensed install. License-only (not auth) so ARTEX's own

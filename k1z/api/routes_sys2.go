@@ -138,7 +138,7 @@ func (s *Server) handleNotifyTest(w http.ResponseWriter, r *http.Request) {
 	n := s.St.GetNotifySettings()
 	prev := notify.DBWebhookURL
 	notify.DBWebhookURL = func() string { return n.WebhookURL }
-	notify.CriticalFindings(1, 0, []string{"[TEST] webhook from k1nzr3c0n settings"})
+	notify.CriticalFindings(1, 0, []string{"[TEST] webhook from hainguyen0207 settings"})
 	notify.DBWebhookURL = prev
 	if n.WebhookURL == "" && config.WebhookURL() == "" {
 		writeDetail(w, 400, "No webhook URL configured")

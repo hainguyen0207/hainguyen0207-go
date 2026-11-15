@@ -1,4 +1,4 @@
-// k1nzr3c0n is a single-binary rewrite of the Python FastAPI+Celery stack:
+// hainguyen0207 is a single-binary rewrite of the Python FastAPI+Celery stack:
 // `serve` runs the API server + embedded worker pool + cron scheduler; the
 // other subcommands mirror the Python CLI (run/validate/plan/list).
 package main
@@ -11,18 +11,18 @@ import (
 	"sort"
 	"strings"
 
-	"k1nzr3c0n/internal/agent"
-	"k1nzr3c0n/internal/api"
-	"k1nzr3c0n/internal/bus"
-	"k1nzr3c0n/internal/capture"
-	"k1nzr3c0n/internal/config"
-	"k1nzr3c0n/internal/enrich"
-	"k1nzr3c0n/internal/explore"
-	"k1nzr3c0n/internal/notify"
-	"k1nzr3c0n/internal/runner"
-	"k1nzr3c0n/internal/schedule"
-	"k1nzr3c0n/internal/store"
-	"k1nzr3c0n/internal/workflow"
+	"hainguyen0207/internal/agent"
+	"hainguyen0207/internal/api"
+	"hainguyen0207/internal/bus"
+	"hainguyen0207/internal/capture"
+	"hainguyen0207/internal/config"
+	"hainguyen0207/internal/enrich"
+	"hainguyen0207/internal/explore"
+	"hainguyen0207/internal/notify"
+	"hainguyen0207/internal/runner"
+	"hainguyen0207/internal/schedule"
+	"hainguyen0207/internal/store"
+	"hainguyen0207/internal/workflow"
 )
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 	case "list":
 		cmdList(os.Args[2:])
 	case "version":
-		fmt.Println("k1nzr3c0n-go 3.0.0")
+		fmt.Println("hainguyen0207-go 3.0.0")
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q (serve|run|validate|plan|list)\n", os.Args[1])
 		os.Exit(2)
@@ -98,7 +98,7 @@ func serve() {
 	}
 	srv.Explore = explore.NewManager(st, b, proxyAddr)
 	addr := config.HTTPAddr()
-	fmt.Printf("[+] k1nzr3c0n-go listening on %s (base=%s workers=%d)\n",
+	fmt.Printf("[+] hainguyen0207-go listening on %s (base=%s workers=%d)\n",
 		addr, config.BaseDir(), config.WorkerConcurrency())
 	if err := listenAndServe(addr, srv.Handler()); err != nil {
 		fmt.Fprintln(os.Stderr, "[x]", err)
@@ -121,7 +121,7 @@ func cmdRun(args []string) {
 		os.Exit(2)
 	}
 	if *wf == "" || *target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: k1nzr3c0n run -w workflow.yaml -t target [--plan] [--vars k=v]")
+		fmt.Fprintln(os.Stderr, "Usage: hainguyen0207 run -w workflow.yaml -t target [--plan] [--vars k=v]")
 		os.Exit(2)
 	}
 	w, err := workflow.Load(*wf)
@@ -158,7 +158,7 @@ func cmdRun(args []string) {
 
 func cmdValidate(args []string) {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "Usage: k1nzr3c0n validate workflow.yaml")
+		fmt.Fprintln(os.Stderr, "Usage: hainguyen0207 validate workflow.yaml")
 		os.Exit(2)
 	}
 	w, err := workflow.Load(args[0])
@@ -190,7 +190,7 @@ func cmdPlan(args []string) {
 		os.Exit(2)
 	}
 	if *wf == "" || *target == "" {
-		fmt.Fprintln(os.Stderr, "Usage: k1nzr3c0n plan -w workflow.yaml -t target")
+		fmt.Fprintln(os.Stderr, "Usage: hainguyen0207 plan -w workflow.yaml -t target")
 		os.Exit(2)
 	}
 	w, err := workflow.Load(*wf)

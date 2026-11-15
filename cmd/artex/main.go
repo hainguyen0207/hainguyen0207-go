@@ -117,7 +117,7 @@ func run() int {
 	log.Printf("[config] skill directory: %s", skillDir)
 	srv := server.New(ctx, mgr, skillDir, *dataDir, config.BaseDir())
 
-	// Mount k1nzr3c0n's workflow-runner backend under /api/v1/* + /ws/* (own
+	// Mount hainguyen0207's workflow-runner backend under /api/v1/* + /ws/* (own
 	// SQLite store + runner). ARTEX/ScopeWeaver owns everything else.
 	// NOTE: auto-triage auto-spawn is intentionally NOT wired — the operator runs
 	// workflows manually; tasks never launch workflows on their own.

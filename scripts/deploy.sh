@@ -1,6 +1,6 @@
 
 #!/usr/bin/env bash
-# One-command deploy for K1nzr3c0n. Run from the source checkout on the server.
+# One-command deploy for Hainguyen0207. Run from the source checkout on the server.
 # It does EVERYTHING in the right order so nothing is forgotten (the usual trap is
 # a `go build` without rebuilding the embedded frontend):
 #   pull → build FE → embed dist → build backend → sync runtime assets → restart
@@ -16,13 +16,15 @@
 # and fill in), it is applied automatically after restart via the open /api/v1/keys API.
 #
 # Env (override as needed):
-#   SRC=/opt/k1nzr3c0n-src   K1NZR3C0N_BASE=/opt/k1nzr3c0n   SERVICE=k1nzr3c0n-go
+#   SRC=/opt/hainguyen0207-src   HAINGUYEN0207_BASE=/opt/hainguyen0207   SERVICE=hainguyen0207-go
 #   BASE_URL=http://127.0.0.1:8000   COMMON_URL=<common.txt release asset>
 set -euo pipefail
+# sudo's secure_path (Kali/Debian) omits /usr/local/bin — Go + recon tools live there.
+export PATH="/usr/local/go/bin:/usr/local/bin:${PATH}"
 
-SRC="${SRC:-/opt/k1nzr3c0n-src}"
-BASE="${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}"
-SERVICE="${SERVICE:-k1nzr3c0n-go}"
+SRC="${SRC:-/opt/hainguyen0207-src}"
+BASE="${HAINGUYEN0207_BASE:-/opt/hainguyen0207}"
+SERVICE="${SERVICE:-hainguyen0207-go}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
 SKIP_FE="${SKIP_FE:-0}"
 RESEED="${RESEED:-0}"
@@ -48,8 +50,8 @@ fi
 step "Build backend (go build -tags embedui, stripped)"
 # -s -w -trimpath strip symbols/paths so the embedded license public key and the
 # gate logic are harder to locate and patch in the shipped binary.
-ARTEX_SKIP_FRONTEND=1 go build -tags embedui -trimpath -ldflags "-s -w -buildid=" -o k1nzr3c0n ./cmd/artex
-./k1nzr3c0n -h >/dev/null 2>&1 && echo "binary OK"
+ARTEX_SKIP_FRONTEND=1 go build -tags embedui -trimpath -ldflags "-s -w -buildid=" -o hainguyen0207 ./cmd/artex
+./hainguyen0207 -h >/dev/null 2>&1 && echo "binary OK"
 
 step "Sync runtime assets into $BASE (scripts, workflows, wordlists, skills)"
 mkdir -p "$BASE/scripts" "$BASE/wordlists" "$BASE/skills" "$BASE/workflows"
@@ -62,7 +64,7 @@ SL=/usr/share/seclists
 [ -f "$SL/Discovery/DNS/subdomains-top1million-20000.txt" ] && cp "$SL/Discovery/DNS/subdomains-top1million-20000.txt" "$BASE/wordlists/subdomains-top1million-20000.txt"
 [ -f "$SL/Discovery/Web-Content/burp-parameter-names.txt" ] && cp "$SL/Discovery/Web-Content/burp-parameter-names.txt" "$BASE/wordlists/params-medium.txt"
 # common.txt comes from the project's release asset (pinned copy); SecLists is the offline fallback.
-COMMON_URL="${COMMON_URL:-https://github.com/kienzx203/Lab_research_tools_k1nz/releases/download/tools/common.txt}"
+COMMON_URL="${COMMON_URL:-https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/common.txt}"
 if curl -fsSL "$COMMON_URL" -o "$BASE/wordlists/common.txt" && [ -s "$BASE/wordlists/common.txt" ]; then
   echo "  common.txt ← release asset ($(wc -l < "$BASE/wordlists/common.txt") lines)"
 elif [ -f "$SL/Discovery/Web-Content/common.txt" ]; then
@@ -86,7 +88,7 @@ cp skills/OFFENSIVE-CLAUDE-LICENSE skills/OFFENSIVE-CLAUDE-NOTICE.md "$BASE/skil
 
 step "Restart $SERVICE"
 systemctl stop "$SERVICE" 2>/dev/null || true
-cp k1nzr3c0n "$BASE/"
+cp hainguyen0207 "$BASE/"
 systemctl daemon-reload 2>/dev/null || true   # pick up any edited unit file (else systemd runs the stale one)
 systemctl reset-failed "$SERVICE" 2>/dev/null || true
 systemctl start "$SERVICE"

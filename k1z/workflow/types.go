@@ -1,4 +1,4 @@
-// Package workflow implements the K1NZR3C0N workflow engine: YAML loading with
+// Package workflow implements the HAINGUYEN0207 workflow engine: YAML loading with
 // includes and validation, {var} templating, Kahn topological ordering with BFS
 // level grouping, and the parallel executor with pause/resume/cancel semantics.
 // Behavior mirrors the Python engine (workflow.py) step for step.

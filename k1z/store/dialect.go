@@ -1,7 +1,7 @@
 package store
 
 // Dialect support lets the k1z store run on either SQLite (the default, and the
-// format of the original Python k1nzr3c0n.db) or PostgreSQL (shared with the
+// format of the original Python hainguyen0207.db) or PostgreSQL (shared with the
 // ARTEX half of the binary). The two differ in three ways the rest of the package
 // must not care about:
 //

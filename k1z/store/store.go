@@ -1,5 +1,5 @@
 // Package store is the SQLite persistence layer. The schema matches the Python
-// original column-for-column so an existing k1nzr3c0n.db works as-is.
+// original column-for-column so an existing hainguyen0207.db works as-is.
 package store
 
 import (

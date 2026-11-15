@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # recon-graph.py — stitch a recon run's output into one attack-surface graph.
 #
-# Reads a workspace (full k1nzr3c0n pipeline) OR a dns-recon output dir and links
+# Reads a workspace (full hainguyen0207 pipeline) OR a dns-recon output dir and links
 # every layer into nodes + edges:
 #
 #   subdomain --A--> ip --in_asn--> ASN

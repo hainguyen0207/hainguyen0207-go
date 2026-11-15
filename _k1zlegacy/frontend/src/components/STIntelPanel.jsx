@@ -113,7 +113,7 @@ export default function STIntelPanel({ runId }) {
         <p className="text-2xl mb-2" style={{ color: 'var(--text-3)' }}>⊘</p>
         <p className="text-sm mb-1" style={{ color: 'var(--text-2)' }}>No SecurityTrails intel for this run.</p>
         <p className="text-[11px]" style={{ color: 'var(--text-3)' }}>
-          Set SECURITYTRAILS_KEY in /opt/k1nzr3c0n/.env and run the 01 pipeline
+          Set SECURITYTRAILS_KEY in /opt/hainguyen0207/.env and run the 01 pipeline
           (step p_securitytrails fetches everything with --mode all).
         </p>
       </div>

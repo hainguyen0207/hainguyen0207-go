@@ -43,7 +43,7 @@ func TestInstallGhBinaryTar(t *testing.T) {
 		t.Skip("network test")
 	}
 	dir := t.TempDir()
-	t.Setenv("K1NZR3C0N_BIN_DIR", dir)
+	t.Setenv("HAINGUYEN0207_BIN_DIR", dir)
 	tl := ByName("metabigor")
 	if tl == nil {
 		t.Fatal("metabigor missing from catalog")
@@ -63,7 +63,7 @@ func TestInstallGhBinaryZip(t *testing.T) {
 		t.Skip("network test")
 	}
 	dir := t.TempDir()
-	t.Setenv("K1NZR3C0N_BIN_DIR", dir)
+	t.Setenv("HAINGUYEN0207_BIN_DIR", dir)
 	tl := ByName("ffuf")
 	if tl == nil {
 		t.Fatal("ffuf missing from catalog")

@@ -1,6 +1,6 @@
 ---
 name: recon-engine
-description: Use whenever a task needs recon on a target — how the task agent drives the k1nzr3c0n Workflow Runner and reads back the attack surface. The authoritative wiring between the agent and the engine's four channels — WORKFLOW (run/list/status), LOG (live tail), GRAPH (relationship map), and DB (findings/assets) — plus how to persist results. Load before launching or triaging any recon.
+description: Use whenever a task needs recon on a target — how the task agent drives the hainguyen0207 Workflow Runner and reads back the attack surface. The authoritative wiring between the agent and the engine's four channels — WORKFLOW (run/list/status), LOG (live tail), GRAPH (relationship map), and DB (findings/assets) — plus how to persist results. Load before launching or triaging any recon.
 ---
 
 # Recon Engine Linkage (task agent ⇄ workflow · log · graph · DB)

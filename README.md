@@ -1,6 +1,6 @@
 <div align="center">
 
-# k1nzr3c0n
+# hainguyen0207
 
 **Autonomous offensive-security platform** — an LLM pentest agent fused with a
 deterministic recon **workflow runner**, one web UI, one Go binary.
@@ -22,7 +22,7 @@ deterministic recon **workflow runner**, one web UI, one Go binary.
 > 📖 **[Full documentation → docs/USAGE.md](docs/USAGE.md)** — install, every feature
 > explained by menu, end-to-end workflow, deploy and troubleshooting.
 
-k1nzr3c0n is a fork of **ARTEX** (an autonomous penetration-testing agent) with a
+hainguyen0207 is a fork of **ARTEX** (an autonomous penetration-testing agent) with a
 built-in **recon workflow engine**. Two capabilities share one database and UI:
 
 - **🤖 Task Agent (ARTEX core)** — an LLM-driven agent that plans, runs tools,
@@ -68,7 +68,7 @@ Both are orchestrated from a Next.js UI and exposed over an HTTP API.
           └───────────────────────────────────────┬──────────────────────────────────────────┘
                                                    │  HTTP API (:8000)
           ┌────────────────────────────────────────┴─────────────────────────────────────────┐
-          │                          k1nzr3c0n (single Go binary)                              │
+          │                          hainguyen0207 (single Go binary)                              │
           │   agent/  server/  db/      ← ARTEX core (agent, API, PostgreSQL)                  │
           │   k1z/ (runner, graph, api) ← recon workflow engine + relationship graph           │
           │   norma/ (local module)     ← LLM provider layer (Anthropic / OpenAI / claude-sub) │
@@ -91,7 +91,7 @@ service) and builds the app:
 ```bash
 sudo REPO_URL=https://github.com/<you>/<repo>.git bash scripts/install-kali.sh
 # …or, from an existing checkout:
-cd /opt/k1nzr3c0n-src && sudo bash scripts/install-kali.sh
+cd /opt/hainguyen0207-src && sudo bash scripts/install-kali.sh
 ```
 
 Then open `http://<server-ip>:8000/` and log in as `ARTEX`.
@@ -123,11 +123,11 @@ cd web && npm install && npm run build:static && cd ..
 rm -rf server/webui/dist && cp -r web/out server/webui/dist
 
 # backend (embeds the frontend)
-ARTEX_SKIP_FRONTEND=1 go build -tags embedui -o k1nzr3c0n ./cmd/artex
+ARTEX_SKIP_FRONTEND=1 go build -tags embedui -o hainguyen0207 ./cmd/artex
 
 # run (PostgreSQL must be reachable via ARTEX_PG_DSN)
 ARTEX_PG_DSN='postgres://artex:artex@127.0.0.1:5432/artex?sslmode=disable' \
-  ./k1nzr3c0n -addr :8000
+  ./hainguyen0207 -addr :8000
 ```
 
 Redeploying on a server is handled by **`scripts/deploy.sh`** (pull → build FE →

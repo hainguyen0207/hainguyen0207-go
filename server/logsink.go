@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -207,17 +208,39 @@ func parseLog(line string) LogLine {
 			tag = msg[1:i]
 		}
 	}
-	return LogLine{TS: time.Now().Format(time.RFC3339), Level: levelOf(msg), Tag: tag, Text: msg}
+	return LogLine{TS: time.Now().Format(time.RFC3339), Level: levelOf(tag, msg), Tag: tag, Text: msg}
 }
 
-func levelOf(msg string) string {
+var logStatusRe = regexp.MustCompile(`\bstatus=(\d{3})\b`)
+
+func levelOf(tag, msg string) string {
 	low := strings.ToLower(msg)
+	switch {
+	case tag == "llm-ratelimit":
+		// Rate-limit telemetry: the header dump always contains words like
+		// "rejected"/"disabled" (overage fields), so judge by the HTTP status only.
+		if m := logStatusRe.FindStringSubmatch(msg); m != nil {
+			switch {
+			case m[1] == "429":
+				return "warn"
+			case m[1] >= "400":
+				return "error"
+			}
+		}
+		return "info"
+	case tag == "task" && strings.Contains(low, "created task"):
+		// the line embeds the whole user goal/prompt text — not a log level signal
+		return "info"
+	case strings.Contains(low, "retrying"):
+		// transient failure that is being retried automatically
+		return "warn"
+	}
 	for _, k := range []string{"fatal", "panic", "error", "err:", "fail", "drop", "reject", "✕", "unreachable"} {
 		if strings.Contains(low, k) {
 			return "error"
 		}
 	}
-	for _, k := range []string{"warn", "disabled", "disable", "skip", "stopped", "⚠", "retry"} {
+	for _, k := range []string{"warn", "disabled", "disable", "skip", "stopped", "⚠", "retry", "timed out"} {
 		if strings.Contains(low, k) {
 			return "warn"
 		}

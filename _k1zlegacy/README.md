@@ -1,6 +1,6 @@
-# k1nzr3c0n-go
+# hainguyen0207-go
 
-Single-binary Go rewrite of the [K1NZR3C0N](https://github.com/) Python stack
+Single-binary Go rewrite of the [HAINGUYEN0207](https://github.com/) Python stack
 (FastAPI + Celery + Redis + beat → **one Go binary**). Same SQLite schema, same
 REST/WebSocket API, same workflow YAML format — the original React frontend and
 workflows run unchanged.
@@ -24,7 +24,7 @@ API surface: `/api/v1/llm` (profiles CRUD), `/api/v1/agent/chat` +
 `/agent/conversations`, `/api/v1/companies`, `/api/v1/graph/assets`,
 `/api/v1/traffic` (+ `/bind`), `/api/v1/capture/{status,toggle}`.
 
-Env: `K1NZR3C0N_PROXY_ADDR` (recording proxy listen, default `127.0.0.1:8083`).
+Env: `HAINGUYEN0207_PROXY_ADDR` (recording proxy listen, default `127.0.0.1:8083`).
 
 ## What replaces what
 
@@ -50,25 +50,25 @@ Env: `K1NZR3C0N_PROXY_ADDR` (recording proxy listen, default `127.0.0.1:8083`).
 
 ```bash
 # build (frontend is prebuilt into static/; rebuild with cd frontend && npm run build)
-go build -o k1nzr3c0n ./cmd/k1nzr3c0n
+go build -o hainguyen0207 ./cmd/hainguyen0207
 
 # run everything (API + workers + scheduler) — base dir layout:
-#   $K1NZR3C0N_BASE/{workflows,wordlists,static,runs/k1nzr3c0n.db}
-K1NZR3C0N_BASE=/opt/k1nzr3c0n K1NZR3C0N_ADDR=:8000 ./k1nzr3c0n serve
+#   $HAINGUYEN0207_BASE/{workflows,wordlists,static,runs/hainguyen0207.db}
+HAINGUYEN0207_BASE=/opt/hainguyen0207 HAINGUYEN0207_ADDR=:8000 ./hainguyen0207 serve
 ```
 
-CLI (parity with the Python `k1nzr3c0n` command):
+CLI (parity with the Python `hainguyen0207` command):
 
 ```bash
-./k1nzr3c0n validate workflows/01-full-recon-pipeline.yaml
-./k1nzr3c0n plan -w workflows/02-js-secrets-recon.yaml -t example.com
-./k1nzr3c0n run    -w workflows/02-js-secrets-recon.yaml -t example.com --vars nuclei_rl=50
+./hainguyen0207 validate workflows/01-full-recon-pipeline.yaml
+./hainguyen0207 plan -w workflows/02-js-secrets-recon.yaml -t example.com
+./hainguyen0207 run    -w workflows/02-js-secrets-recon.yaml -t example.com --vars nuclei_rl=50
 ```
 
-Environment: `K1NZR3C0N_BASE`, `K1NZR3C0N_ADDR` (:8000), `K1NZR3C0N_API_TOKEN`
-(bearer auth for `/api/*`, `?token=` for websockets), `K1NZR3C0N_WORKERS` (2),
-`K1NZR3C0N_WEBHOOK_URL` / `K1NZR3C0N_WEBHOOK_USERNAME` (Discord/Slack),
-`K1NZR3C0N_TASK_TIME_LIMIT` (43200s).
+Environment: `HAINGUYEN0207_BASE`, `HAINGUYEN0207_ADDR` (:8000), `HAINGUYEN0207_API_TOKEN`
+(bearer auth for `/api/*`, `?token=` for websockets), `HAINGUYEN0207_WORKERS` (2),
+`HAINGUYEN0207_WEBHOOK_URL` / `HAINGUYEN0207_WEBHOOK_USERNAME` (Discord/Slack),
+`HAINGUYEN0207_TASK_TIME_LIMIT` (43200s).
 
 ## Verified parity (e2e on this machine)
 
@@ -98,7 +98,7 @@ Environment: `K1NZR3C0N_BASE`, `K1NZR3C0N_ADDR` (:8000), `K1NZR3C0N_API_TOKEN`
 
 Environment additions: `GITHUB_TOKEN` (raises the GitHub API rate limit from
 60 to 5000 req/hr — recommended for the daily version check),
-`K1NZR3C0N_BIN_DIR` (tool install dir, default `/usr/local/bin`).
+`HAINGUYEN0207_BIN_DIR` (tool install dir, default `/usr/local/bin`).
 
 ## Known simplifications vs Python
 
@@ -111,7 +111,7 @@ Environment additions: `GITHUB_TOKEN` (raises the GitHub API rate limit from
 ## Layout
 
 ```
-cmd/k1nzr3c0n      serve + CLI (run/validate/plan/list)
+cmd/hainguyen0207      serve + CLI (run/validate/plan/list)
 internal/workflow  engine: YAML, includes, {var} templates, topo, levels,
                    parallel exec, fanout, timeout/retries, pause/resume/cancel
 internal/runner    worker pool, run lifecycle, API-key injection, webhooks
@@ -129,24 +129,24 @@ internal/toolsmeta/gen_catalog.py + catalog_gen.go — regenerate the catalog
                    after editing the Python TOOLS list
 ```
 1. Build & Deploy lên Kali
-# Trên máy Kali (hoặc copy cả thư mục k1nzr3c0n-go sang):
-cd k1nzr3c0n-go
+# Trên máy Kali (hoặc copy cả thư mục hainguyen0207-go sang):
+cd hainguyen0207-go
 bash build.sh                    # build frontend (nếu chưa có) + binary
-sudo mkdir -p /opt/k1nzr3c0n
-sudo cp -r k1nzr3c0n workflows wordlists static scripts deploy /opt/k1nzr3c0n/
+sudo mkdir -p /opt/hainguyen0207
+sudo cp -r hainguyen0207 workflows wordlists static scripts deploy /opt/hainguyen0207/
 
 # Chạy như service:
-sudo cp deploy/k1nzr3c0n-go.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now k1nzr3c0n-go
+sudo cp deploy/hainguyen0207-go.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now hainguyen0207-go
 2. Chạy trực tiếp (test nhanh)
-K1NZR3C0N_BASE=/opt/k1nzr3c0n ./k1nzr3c0n serve     # mở http://:8000
+HAINGUYEN0207_BASE=/opt/hainguyen0207 ./hainguyen0207 serve     # mở http://:8000
 Env quan trọng:
 Biến	Mặc định	Ý nghĩa
-K1NZR3C0N_BASE	.	Gốc chứa workflows/ wordlists/ static/ runs/
-K1NZR3C0N_ADDR	:8000	Port server
-K1NZR3C0N_WORKERS	2	Số run chạy song song
-K1NZR3C0N_API_TOKEN	(rỗng)	Bật auth: /api/* cần Authorization: Bearer <token>, WS cần ?token=
-K1NZR3C0N_WEBHOOK_URL	(rỗng)	Discord/Slack nhận alert run + vuln critical
+HAINGUYEN0207_BASE	.	Gốc chứa workflows/ wordlists/ static/ runs/
+HAINGUYEN0207_ADDR	:8000	Port server
+HAINGUYEN0207_WORKERS	2	Số run chạy song song
+HAINGUYEN0207_API_TOKEN	(rỗng)	Bật auth: /api/* cần Authorization: Bearer <token>, WS cần ?token=
+HAINGUYEN0207_WEBHOOK_URL	(rỗng)	Discord/Slack nhận alert run + vuln critical
 GITHUB_TOKEN	(rỗng)	Nâng rate-limit check version tool 60→5000 req/h
 3. Luồng sử dụng Web UI (http://localhost:8000)
 1. Targets → Add target: example.com, scope *.example.com, mode bounty — đây là cổng deny-wins, target nào mode oos sẽ bị chặn 403 khi chạy
@@ -156,18 +156,18 @@ GITHUB_TOKEN	(rỗng)	Nâng rate-limit check version tool 60→5000 req/h
 5. Findings → triage (open/fp/resolved, notes, tags), nút Resolve duplicates
 6. Inventory → host:port sống qua các run, kèm screenshot
 7. Schedules → cron recon định kỳ (0 3 * * *), bật alert new-assets
-8. Tools → Check versions → Update all (tải binary thật từ GitHub về /usr/local/bin, cần chạy quyền ghi — hoặc set K1NZR3C0N_BIN_DIR)
+8. Tools → Check versions → Update all (tải binary thật từ GitHub về /usr/local/bin, cần chạy quyền ghi — hoặc set HAINGUYEN0207_BIN_DIR)
 9. Terminal → bash ngay trong browser
 Tự động mỗi ngày: dọn workspace >30 ngày (giữ kết quả + screenshots), check tool version 04:00, nuclei -ut 04:30.
 4. CLI (không cần UI)
-./k1nzr3c0n validate workflows/01-full-recon-pipeline.yaml   # kiểm tra + xem levels
-./k1nzr3c0n plan -w workflows/02-js-secrets-recon.yaml -t example.com
-./k1nzr3c0n run -w workflows/02-js-secrets-recon.yaml -t example.com \
+./hainguyen0207 validate workflows/01-full-recon-pipeline.yaml   # kiểm tra + xem levels
+./hainguyen0207 plan -w workflows/02-js-secrets-recon.yaml -t example.com
+./hainguyen0207 run -w workflows/02-js-secrets-recon.yaml -t example.com \
     --vars nuclei_rl=50 --continue-on-error -o runs/manual1
 # Resume sau khi pause (exit 75) hoặc crash:
-./k1nzr3c0n run ... -o runs/manual1 --resume
+./hainguyen0207 run ... -o runs/manual1 --resume
 5. Lưu ý vận hành
 - Pause chỉ có hiệu lực giữa các level — step đang chạy (vd. port scan dài) sẽ chạy xong mới pause
 - Cancel giết process group ngay (SIGTERM→SIGKILL) — findings đã thu vẫn được parse
 - Tool rebuild_only (42/105) không update in-place được — đó là giới hạn của chính bản gốc (cài qua install.sh lúc build máy)
-- DB tương thích drop-in với bản Python: trỏ K1NZR3C0N_BASE vào thư mục cũ là dùng được luôn lịch sử runs/findings
+- DB tương thích drop-in với bản Python: trỏ HAINGUYEN0207_BASE vào thư mục cũ là dùng được luôn lịch sử runs/findings

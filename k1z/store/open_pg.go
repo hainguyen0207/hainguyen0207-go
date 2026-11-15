@@ -4,7 +4,7 @@ package store
 // PostgreSQL ONLY by setting K1Z_PG_DSN explicitly. There is deliberately no
 // implicit fallback to ARTEX's ARTEX_PG_DSN: an existing install that already
 // sets ARTEX_PG_DSN (every ARTEX install does) would otherwise silently abandon
-// its k1nzr3c0n.db for an empty PostgreSQL schema on the next restart. To run
+// its hainguyen0207.db for an empty PostgreSQL schema on the next restart. To run
 // both halves on one database, set K1Z_PG_DSN to the same value as ARTEX_PG_DSN.
 
 import (

@@ -46,7 +46,7 @@ vars:
   chaos_key: ''
   # API keys are auto-injected from the /keys page — no need to set them here.
   # Resolvers — trickest pre-validated list (13k resolvers) preferred; fallback = 6 hardcoded
-  resolvers_file: ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/wordlists/resolvers-trickest.txt
+  resolvers_file: ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/wordlists/resolvers-trickest.txt
   dns_resolvers: 1.1.1.1,8.8.8.8,1.0.0.1,8.8.4.4,9.9.9.9,208.67.222.222
   dnsx_threads: '25'           # raw-UDP fallback path ONLY — 50 threads overflowed conntrack
   dnsx_retry: '2'
@@ -88,11 +88,11 @@ vars:
   run_favicon_pivot: 'false'     # mmh3 favicon hash → Shodan/FOFA same-favicon hosts
   run_vhost_ip_fuzz: 'true'      # ffuf Host-header fuzz non-CDN IPs (touches target directly)
   run_ip_pivot: 'false'          # mapcidr PTR sweep neighboring /24 CIDR blocks
-  vhost_wordlist: ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/wordlists/subdomains-top1million-20000.txt
+  vhost_wordlist: ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/wordlists/subdomains-top1million-20000.txt
   vhost_ip_fuzz_max_ips: '20'
   ip_pivot_prefix: '24'
   ip_pivot_max_ranges: '5'
-  scripts_dir: ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}
+  scripts_dir: ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}
   oneforall_cmd: python /opt/OneForAll/oneforall.py
 steps:
 - id: setup_subfinder_keys
@@ -696,7 +696,7 @@ steps:
     ST_KEY="${SECURITYTRAILS_KEY:-}"
     ST_COOKIE="${ST_COOKIE:-}"
     [ -z "$ST_KEY" ] && echo "[securitytrails] no key — skipping" && touch {workspace}/p_securitytrails.txt && exit 0
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
       --mode all --out {workspace} --pivot-types ns,mx ${ST_COOKIE:+--cookie "$ST_COOKIE"} || true
     if [ -s {workspace}/st_subdomains.txt ]; then
       sort -u {workspace}/st_subdomains.txt > {workspace}/p_securitytrails.txt
@@ -1268,7 +1268,7 @@ steps:
   run: |
     touch {workspace}/p_dns_zone.txt
     SCRIPT={scripts_dir}/scripts/dns-recon.sh
-    [ -f "$SCRIPT" ] || SCRIPT=/opt/k1nzr3c0n-src/scripts/dns-recon.sh
+    [ -f "$SCRIPT" ] || SCRIPT=/opt/hainguyen0207-src/scripts/dns-recon.sh
     [ -f "$SCRIPT" ] || { printf '[dns-recon] script not found — skipping\n'; exit 0; }
     OUT={workspace}/dnsrecon
     # FULL recon (don't drop anything): all modules + --svc service harvest
@@ -1417,7 +1417,7 @@ steps:
     ST_KEY="${SECURITYTRAILS_KEY:-}"
     ST_COOKIE="${ST_COOKIE:-}"
     [ -z "$ST_KEY" ] && exit 0
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
       --mode all --out {workspace} --pivot-types ns,mx ${ST_COOKIE:+--cookie "$ST_COOKIE"} || true
     for f in st_dns_records.txt st_associated.txt st_pivot_domains.txt; do
       touch {workspace}/$f
@@ -1441,7 +1441,7 @@ steps:
   # NOTE: st_pivot_domains/st_associated are deliberately NOT mined — those
   # are other orgs' root domains and merging them would break scope.
   run: |
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/st_intel_mine.py \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/st_intel_mine.py \
       {workspace} {target} 2>/dev/null || true
     touch {workspace}/st_intel_subs.txt
     printf 'ST intel mined subs: %s\n' "$(wc -l < {workspace}/st_intel_subs.txt)"
@@ -1713,7 +1713,7 @@ steps:
         sleep 5
       done
     fi
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/resolver_filter.py \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/resolver_filter.py \
       {vars.resolvers_file} {workspace}/resolvers_filtered.txt \
       --max-probes 400 --threads 30 || true
     test -s {workspace}/resolvers_filtered.txt || \
@@ -1890,7 +1890,7 @@ steps:
     if [ -s {workspace}/auth_ns.txt ]; then
       # Wildcard guard: if a random label resolves at the auth NS the zone is
       # wildcarded → skip pass 4 (it would re-add the junk puredns filtered).
-      RND="k1nzr3c0n-$(date +%s)-probe.{target}"
+      RND="hainguyen0207-$(date +%s)-probe.{target}"
       NS1=$(head -1 {workspace}/auth_ns.txt)
       if ! timeout 4 dig +short +time=2 +tries=1 @"$NS1" A "$RND" 2>/dev/null | grep -q .; then
         while read H; do
@@ -2982,7 +2982,7 @@ steps:
     ST_KEY="${SECURITYTRAILS_KEY:-}"
     ST_COOKIE="${ST_COOKIE:-}"
     [ -z "$ST_KEY" ] && exit 0
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
       --mode missing --out {workspace} --pivot-types ns,mx ${ST_COOKIE:+--cookie "$ST_COOKIE"} || true
     for f in st_dns_records.txt st_associated.txt st_pivot_domains.txt; do
       touch {workspace}/$f
@@ -3481,7 +3481,7 @@ steps:
 
     # ── Write summary.md using printf (heredoc not usable inside YAML block scalar)
     {
-      printf '# K1NZR3C0N \xe2\x80\x94 Full Recon Report\n'
+      printf '# HAINGUYEN0207 \xe2\x80\x94 Full Recon Report\n'
       printf '**Target:** {target}\n\n'
       printf '## Asset Discovery\n\n'
       printf '| Metric | Count |\n'

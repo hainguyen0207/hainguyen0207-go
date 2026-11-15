@@ -41,7 +41,7 @@ var providers = []provider{
 	{"virustotal", "VirusTotal", "Subdomain Intel", "virustotal.com", "API key — auto-injected as $VIRUSTOTAL_KEY env var", true, nil, "VIRUSTOTAL_KEY"},
 	{"bevigil", "BeVigil", "Subdomain Intel", "bevigil.com", "API key — auto-injected as $BEVIGIL_KEY env var", true, nil, "BEVIGIL_KEY"},
 	{"c99", "C99", "Subdomain Intel", "subdomainfinder.c99.nl", "API key", true, nil, "C99_API_KEY"},
-	{"intelx", "IntelX", "Subdomain Intel", "intelx.io", "API key only (UUID) — host suffix :2.intelx.io auto-appended for subfinder", true, nil, "INTELX_API_KEY"},
+	{"intelx", "IntelX", "Subdomain Intel", "intelx.io", "API key (UUID) — free.intelx.io used by default; paid key: 2.intelx.io:KEY", true, nil, "INTELX_API_KEY"},
 	{"hackertarget", "HackerTarget", "Subdomain Intel", "hackertarget.com", "API key", true, nil, "HACKERTARGET_API_KEY"},
 	{"dnsdumpster", "DNSDumpster", "Subdomain Intel", "dnsdumpster.com", "API key", true, nil, "DNSDUMPSTER_API_KEY"},
 	{"whoisxmlapi", "WhoisXML", "Subdomain Intel", "whoisxmlapi.com", "API key", true, nil, "WHOISXMLAPI_API_KEY"},
@@ -156,7 +156,7 @@ func (s *Server) handleKeyExportSubfinder(w http.ResponseWriter, r *http.Request
 			}
 			val := maskValue(v) // masked preview — never expose raw keys
 			if p.ID == "intelx" && !strings.Contains(v, ":") {
-				val = maskValue(v) + ":2.intelx.io"
+				val = "free.intelx.io:" + maskValue(v)
 			}
 			b.WriteString(key + ":\n  - " + val + "\n")
 		}

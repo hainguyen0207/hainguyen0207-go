@@ -718,8 +718,10 @@ func writeSubfinderConfig(keyMap map[string]string) {
 		if k, ok := subfinderKeyMap[p]; ok {
 			key = k
 		}
+		// IntelX: free-tier keys only work on free.intelx.io (2.intelx.io is the
+		// paid host). Users with a paid key can store "2.intelx.io:<key>".
 		if p == "intelx" && !strings.Contains(v, ":") {
-			v = "2.intelx.io:" + v
+			v = "free.intelx.io:" + v
 		}
 		cfg[key] = []string{v}
 	}

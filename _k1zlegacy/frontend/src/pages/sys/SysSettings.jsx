@@ -20,13 +20,13 @@ export default function SysSettings() {
           <div className="flex flex-wrap gap-2 mt-3">
             {upd?.update_available && (
               <button className="btn btn-primary text-[11px]" onClick={async () => {
-                try { const r = await api.selfUpdate(); setMsg('Binary updated' + (r?.rollback_available ? ' (rollback available)' : '') + ' — run: systemctl restart k1nzr3c0n-go') } catch (e) { setMsg(e.message) } }}>
+                try { const r = await api.selfUpdate(); setMsg('Binary updated' + (r?.rollback_available ? ' (rollback available)' : '') + ' — run: systemctl restart hainguyen0207-go') } catch (e) { setMsg(e.message) } }}>
                 ↑ Update to {upd.latest}
               </button>
             )}
             <button className="btn text-[11px]" onClick={async () => {
               if (!confirm('Roll back to the previous binary (.old)?')) return
-              try { await api.updateRollback(); setMsg('Rolled back to previous version — run: systemctl restart k1nzr3c0n-go') } catch (e) { setMsg(e.message) } }}>
+              try { await api.updateRollback(); setMsg('Rolled back to previous version — run: systemctl restart hainguyen0207-go') } catch (e) { setMsg(e.message) } }}>
               ↩ Roll back
             </button>
           </div>

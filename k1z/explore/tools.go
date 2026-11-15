@@ -1,10 +1,10 @@
 // Package explore is the ScopeWeaver/ARTEX-style autonomous exploration engine
-// ported onto k1nzr3c0n. It runs goal-driven Tasks over the two-graph model:
+// ported onto hainguyen0207. It runs goal-driven Tasks over the two-graph model:
 // a planner (the only intent generator) reads the exploration graph and emits
 // intents; N workers each claim ONE intent, run real tools traced by the
 // recording proxy, and write facts/findings/assets back into both graphs.
 //
-// This is additive — it reuses k1nzr3c0n's agent.Client (LLM), runner, store
+// This is additive — it reuses hainguyen0207's agent.Client (LLM), runner, store
 // and bus without changing the existing workflow runner.
 package explore
 

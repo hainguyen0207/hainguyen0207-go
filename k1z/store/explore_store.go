@@ -1,5 +1,5 @@
 // Exploration graph + tasks persistence — the ScopeWeaver/ARTEX two-graph model
-// ported onto k1nzr3c0n's SQLite layer. This is ADDITIVE: it lives alongside the
+// ported onto hainguyen0207's SQLite layer. This is ADDITIVE: it lives alongside the
 // existing runs/findings/workflow tables and never touches them.
 //
 // Two graphs:

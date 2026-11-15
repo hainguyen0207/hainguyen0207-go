@@ -32,7 +32,7 @@ vars:
   chaos_key: ''
   # API keys are auto-injected from the /keys page — no need to set them here.
   # Resolvers — trickest pre-validated list (13k resolvers) preferred; fallback = 6 hardcoded
-  resolvers_file: ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/wordlists/resolvers-trickest.txt
+  resolvers_file: ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/wordlists/resolvers-trickest.txt
   dns_resolvers: 1.1.1.1,8.8.8.8,1.0.0.1,8.8.4.4,9.9.9.9,208.67.222.222
   dnsx_threads: '25'           # raw-UDP fallback path ONLY — 50 threads overflowed conntrack
   dnsx_retry: '2'
@@ -68,11 +68,11 @@ vars:
   org_name: ''
   # ── Pivot techniques (off by default — enable per-engagement) ───────────────
   run_uncover_org: 'true'        # uncover org-name search on Shodan/FOFA/ZoomEye (needs org_name)
-  vhost_wordlist: ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/wordlists/subdomains-top1million-20000.txt
+  vhost_wordlist: ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/wordlists/subdomains-top1million-20000.txt
   vhost_ip_fuzz_max_ips: '20'
   ip_pivot_prefix: '24'
   ip_pivot_max_ranges: '5'
-  scripts_dir: ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}
+  scripts_dir: ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}
   oneforall_cmd: python /opt/OneForAll/oneforall.py
 steps:
 - id: setup_subfinder_keys
@@ -676,7 +676,7 @@ steps:
     ST_KEY="${SECURITYTRAILS_KEY:-}"
     ST_COOKIE="${ST_COOKIE:-}"
     [ -z "$ST_KEY" ] && echo "[securitytrails] no key — skipping" && touch {workspace}/p_securitytrails.txt && exit 0
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
       --mode all --out {workspace} --pivot-types ns,mx ${ST_COOKIE:+--cookie "$ST_COOKIE"} || true
     if [ -s {workspace}/st_subdomains.txt ]; then
       sort -u {workspace}/st_subdomains.txt > {workspace}/p_securitytrails.txt
@@ -1248,7 +1248,7 @@ steps:
   run: |
     touch {workspace}/p_dns_zone.txt
     SCRIPT={scripts_dir}/scripts/dns-recon.sh
-    [ -f "$SCRIPT" ] || SCRIPT=/opt/k1nzr3c0n-src/scripts/dns-recon.sh
+    [ -f "$SCRIPT" ] || SCRIPT=/opt/hainguyen0207-src/scripts/dns-recon.sh
     [ -f "$SCRIPT" ] || { printf '[dns-recon] script not found — skipping\n'; exit 0; }
     OUT={workspace}/dnsrecon
     # FULL recon (don't drop anything): all modules + --svc service harvest
@@ -1397,7 +1397,7 @@ steps:
     ST_KEY="${SECURITYTRAILS_KEY:-}"
     ST_COOKIE="${ST_COOKIE:-}"
     [ -z "$ST_KEY" ] && exit 0
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/securitytrails_fetch.py "$ST_KEY" "{target}" \
       --mode all --out {workspace} --pivot-types ns,mx ${ST_COOKIE:+--cookie "$ST_COOKIE"} || true
     for f in st_dns_records.txt st_associated.txt st_pivot_domains.txt; do
       touch {workspace}/$f
@@ -1421,7 +1421,7 @@ steps:
   # NOTE: st_pivot_domains/st_associated are deliberately NOT mined — those
   # are other orgs' root domains and merging them would break scope.
   run: |
-    python3 ${K1NZR3C0N_BASE:-/opt/k1nzr3c0n}/scripts/st_intel_mine.py \
+    python3 ${HAINGUYEN0207_BASE:-/opt/hainguyen0207}/scripts/st_intel_mine.py \
       {workspace} {target} 2>/dev/null || true
     touch {workspace}/st_intel_subs.txt
     printf 'ST intel mined subs: %s\n' "$(wc -l < {workspace}/st_intel_subs.txt)"
@@ -1795,7 +1795,7 @@ steps:
     touch {workspace}/subdomains.txt
     COUNT=$(wc -l < {workspace}/subdomains.txt)
     {
-      printf '# K1NZR3C0N \xe2\x80\x94 Subdomain Discovery (names only, no resolve/probe)\n'
+      printf '# HAINGUYEN0207 \xe2\x80\x94 Subdomain Discovery (names only, no resolve/probe)\n'
       printf '**Target:** {target}\n\n'
       printf 'In-scope subdomain names discovered: %s\n\n' "$COUNT"
       printf 'These are NAMES ONLY \xe2\x80\x94 not resolved, not probed. The agent resolves + httpx + port-scans + probes them.\n\n'

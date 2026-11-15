@@ -95,7 +95,7 @@ function Logo() {
 }
 
 // Sidebar mirrors ScopeWeaver's Features + System groups (exact labels/order).
-// k1nzr3c0n's own workflow-runner pages live in a third group so nothing is lost.
+// hainguyen0207's own workflow-runner pages live in a third group so nothing is lost.
 const NAV_GROUPS = [
   {
     title: 'Features',
@@ -159,7 +159,7 @@ export default function App() {
           <Logo />
           <div className="min-w-0">
             <div className="font-extrabold tracking-[0.18em] text-[13px] leading-tight" style={{ color: 'var(--text)' }}>
-              K1NZR3C0N
+              HAINGUYEN0207
             </div>
             <div className="text-[9.5px] uppercase tracking-[0.16em] leading-tight mt-1" style={{ color: 'var(--text-3)' }}>
               Recon Console

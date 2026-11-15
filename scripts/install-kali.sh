@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  k1nzr3c0n — all-in-one installer for Kali Linux (Debian-based)
+#  hainguyen0207 — all-in-one installer for Kali Linux (Debian-based)
 # ----------------------------------------------------------------------------
 #  Installs every dependency, sets up PostgreSQL, builds the frontend + backend,
 #  installs the systemd service, and (optionally) wires the Claude Pro/Max
@@ -9,20 +9,22 @@
 #  Usage (as root):
 #    sudo REPO_URL=https://github.com/<you>/<repo>.git bash scripts/install-kali.sh
 #  or from an existing checkout (clones nothing, builds in place):
-#    cd /opt/k1nzr3c0n-src && sudo bash scripts/install-kali.sh
+#    cd /opt/hainguyen0207-src && sudo bash scripts/install-kali.sh
 #
 #  Override anything via env (defaults shown):
-#    SRC=/opt/k1nzr3c0n-src   BASE=/opt/k1nzr3c0n   SERVICE=k1nzr3c0n-go
+#    SRC=/opt/hainguyen0207-src   BASE=/opt/hainguyen0207   SERVICE=hainguyen0207-go
 #    PORT=8000   GO_VERSION=1.26.3
 #    PG_USER=artex   PG_PASS=artex   PG_DB=artex
 #    ADMIN_USER=ARTEX   ADMIN_PASS=<prompted if unset>
 #    SKIP_TOOLS=0   SKIP_CLAUDE=0
 # ============================================================================
 set -euo pipefail
+# sudo's secure_path (Kali/Debian) omits /usr/local/bin — Go + recon tools live there.
+export PATH="/usr/local/go/bin:/usr/local/bin:${PATH}"
 
-SRC="${SRC:-/opt/k1nzr3c0n-src}"
-BASE="${BASE:-/opt/k1nzr3c0n}"
-SERVICE="${SERVICE:-k1nzr3c0n-go}"
+SRC="${SRC:-/opt/hainguyen0207-src}"
+BASE="${BASE:-/opt/hainguyen0207}"
+SERVICE="${SERVICE:-hainguyen0207-go}"
 PORT="${PORT:-8000}"
 GO_VERSION="${GO_VERSION:-1.26.3}"
 PG_USER="${PG_USER:-artex}"
@@ -121,7 +123,7 @@ mkdir -p "$BASE"
 step "systemd unit ${SERVICE}.service (listen :${PORT})"
 cat >/etc/systemd/system/${SERVICE}.service <<UNIT
 [Unit]
-Description=k1nzr3c0n (ARTEX autonomous pentest + recon workflow runner)
+Description=hainguyen0207 (ARTEX autonomous pentest + recon workflow runner)
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -130,7 +132,7 @@ Type=simple
 WorkingDirectory=${BASE}
 Environment=ARTEX_PG_DSN=${PG_DSN}
 Environment=CLAUDE_CONFIG_DIR=/root/.claude
-ExecStart=${BASE}/k1nzr3c0n -addr :${PORT}
+ExecStart=${BASE}/hainguyen0207 -addr :${PORT}
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=65536
@@ -146,7 +148,7 @@ systemctl enable "$SERVICE"
 # so install never depends on a server-side Next.js build. Rebuild the FE later
 # only if you change web/ (then: bash scripts/deploy.sh without SKIP_FE).
 step "Build & deploy via scripts/deploy.sh (SKIP_FE=1, using committed frontend)"
-SRC="$SRC" K1NZR3C0N_BASE="$BASE" SERVICE="$SERVICE" BASE_URL="$BASE_URL" SKIP_FE=1 \
+SRC="$SRC" HAINGUYEN0207_BASE="$BASE" SERVICE="$SERVICE" BASE_URL="$BASE_URL" SKIP_FE=1 \
   bash "$SRC/scripts/deploy.sh"
 
 # ── 9. Initialise the admin password (first run only) ───────────────────────
@@ -167,7 +169,7 @@ fi
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 cat <<DONE
 
-$(printf '\033[1;32m✓ k1nzr3c0n installed.\033[0m')
+$(printf '\033[1;32m✓ hainguyen0207 installed.\033[0m')
 
   Web UI : http://${IP:-127.0.0.1}:${PORT}/        (login: ${ADMIN_USER})
   Service: systemctl status ${SERVICE}   |   journalctl -u ${SERVICE} -f

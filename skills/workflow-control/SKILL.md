@@ -1,6 +1,6 @@
 ---
 name: workflow-control
-description: Use when launching, tuning, following, or stopping a k1nzr3c0n recon workflow — the full CONTROL side of the agent⇄workflow relationship (choose → describe/tune → launch → follow → stop). Covers running a TARGETED or STEALTH variant instead of the max-coverage default, and recovering/cancelling runs. Complements `recon-engine` (the read/graph side).
+description: Use when launching, tuning, following, or stopping a hainguyen0207 recon workflow — the full CONTROL side of the agent⇄workflow relationship (choose → describe/tune → launch → follow → stop). Covers running a TARGETED or STEALTH variant instead of the max-coverage default, and recovering/cancelling runs. Complements `recon-engine` (the read/graph side).
 ---
 
 # Workflow Control (choose → tune → launch → follow → stop)

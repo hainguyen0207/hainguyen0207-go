@@ -14,7 +14,7 @@ import (
 
 // baseDir mirrors config.BaseDir without an import cycle.
 func baseDir() string {
-	b := os.Getenv("K1NZR3C0N_BASE")
+	b := os.Getenv("HAINGUYEN0207_BASE")
 	if b == "" {
 		b = "."
 	}

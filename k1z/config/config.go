@@ -1,5 +1,5 @@
 // Package config resolves paths and settings from the environment, mirroring
-// the Python project's config.py. K1NZR3C0N_BASE is the root of all state.
+// the Python project's config.py. HAINGUYEN0207_BASE is the root of all state.
 package config
 
 import (
@@ -14,9 +14,9 @@ func env(key, def string) string {
 	return def
 }
 
-// BaseDir returns the absolute base directory (K1NZR3C0N_BASE, default ".").
+// BaseDir returns the absolute base directory (HAINGUYEN0207_BASE, default ".").
 func BaseDir() string {
-	b := env("K1NZR3C0N_BASE", ".")
+	b := env("HAINGUYEN0207_BASE", ".")
 	if abs, err := filepath.Abs(b); err == nil {
 		return abs
 	}
@@ -24,28 +24,28 @@ func BaseDir() string {
 }
 
 func RunsDir() string      { return filepath.Join(BaseDir(), "runs") }
-func DBPath() string       { return filepath.Join(RunsDir(), "k1nzr3c0n.db") }
+func DBPath() string       { return filepath.Join(RunsDir(), "hainguyen0207.db") }
 func WorkflowsDir() string { return filepath.Join(BaseDir(), "workflows") }
 func WordlistsDir() string { return filepath.Join(BaseDir(), "wordlists") }
 func StaticDir() string    { return filepath.Join(BaseDir(), "static") }
 func HistoryDir() string   { return filepath.Join(WorkflowsDir(), ".history") }
 
 // WebhookURL returns the notification webhook ("" = disabled).
-func WebhookURL() string { return os.Getenv("K1NZR3C0N_WEBHOOK_URL") }
+func WebhookURL() string { return os.Getenv("HAINGUYEN0207_WEBHOOK_URL") }
 
 // WebhookUsername is used for Slack-style webhooks only.
-func WebhookUsername() string { return env("K1NZR3C0N_WEBHOOK_USERNAME", "k1nzr3c0n") }
+func WebhookUsername() string { return env("HAINGUYEN0207_WEBHOOK_USERNAME", "hainguyen0207") }
 
 // APIToken enables bearer auth when non-empty.
-func APIToken() string { return os.Getenv("K1NZR3C0N_API_TOKEN") }
+func APIToken() string { return os.Getenv("HAINGUYEN0207_API_TOKEN") }
 
 // HTTPAddr is the listen address of the API server.
-func HTTPAddr() string { return env("K1NZR3C0N_ADDR", ":8000") }
+func HTTPAddr() string { return env("HAINGUYEN0207_ADDR", ":8000") }
 
 // WorkerConcurrency is the number of runs executing simultaneously.
 func WorkerConcurrency() int {
 	n := 2
-	if v := os.Getenv("K1NZR3C0N_WORKERS"); v != "" {
+	if v := os.Getenv("HAINGUYEN0207_WORKERS"); v != "" {
 		if p, ok := atoiPositive(v); ok {
 			n = p
 		}
@@ -55,7 +55,7 @@ func WorkerConcurrency() int {
 
 // TaskTimeLimit caps a single run's wall clock (seconds); 0 = env default 43200.
 func TaskTimeLimit() int {
-	if v := os.Getenv("K1NZR3C0N_TASK_TIME_LIMIT"); v != "" {
+	if v := os.Getenv("HAINGUYEN0207_TASK_TIME_LIMIT"); v != "" {
 		if p, ok := atoiPositive(v); ok {
 			return p
 		}

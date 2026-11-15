@@ -50,7 +50,7 @@ type Proxy struct {
 // New creates (or loads) the CA and returns a proxy bound to the store.
 func New(st *store.Store, baseDir string) (*Proxy, error) {
 	p := &Proxy{
-		Addr: envOr("K1NZR3C0N_PROXY_ADDR", "127.0.0.1:8083"),
+		Addr: envOr("HAINGUYEN0207_PROXY_ADDR", "127.0.0.1:8083"),
 		st:   st, certCache: map[string]tls.Certificate{},
 	}
 	caDir := filepath.Join(baseDir, "ca")
@@ -489,7 +489,7 @@ func genCA(certPath, keyPath string) error {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "k1nzr3c0n recording CA", Organization: []string{"k1nzr3c0n"}},
+		Subject:               pkix.Name{CommonName: "hainguyen0207 recording CA", Organization: []string{"hainguyen0207"}},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,

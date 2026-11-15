@@ -14,7 +14,7 @@ var sevOrder = map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3, "
 // HTML renders the run report page.
 func HTML(run *store.Run, findings []*store.Finding) string {
 	var b strings.Builder
-	b.WriteString(`<!doctype html><html><head><meta charset="utf-8"><title>k1nzr3c0n report ` + html.EscapeString(run.ID) + `</title>
+	b.WriteString(`<!doctype html><html><head><meta charset="utf-8"><title>hainguyen0207 report ` + html.EscapeString(run.ID) + `</title>
 <style>
 body{font-family:ui-sans-serif,system-ui;background:#0b0e14;color:#d7dde8;margin:2rem}
 h1,h2{color:#7ee2a8} table{border-collapse:collapse;width:100%;margin:1rem 0}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bulk-add recon API keys to K1nzr3c0n via the keys API (PUT /api/v1/keys/{provider}).
+# Bulk-add recon API keys to Hainguyen0207 via the keys API (PUT /api/v1/keys/{provider}).
 #
 # Secrets are read from an env file (default: scripts/api-keys.env) which is
 # GITIGNORED — never put real keys in this script or in the committed example.

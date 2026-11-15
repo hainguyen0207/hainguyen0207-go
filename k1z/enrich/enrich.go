@@ -88,7 +88,7 @@ func probeHTTP(client *http.Client, url string, meta map[string]any) {
 	if err != nil {
 		return
 	}
-	req.Header.Set("User-Agent", "k1nzr3c0n-enrich/1.0")
+	req.Header.Set("User-Agent", "hainguyen0207-enrich/1.0")
 	resp, err := client.Do(req)
 	if err != nil {
 		return

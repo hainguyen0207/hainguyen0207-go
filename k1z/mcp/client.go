@@ -108,7 +108,7 @@ func Connect(ctx context.Context, name, cmd string, args []string) (*Server, err
 	if err := s.roundTrip(ctx, "initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]any{"name": "k1nzr3c0n-agent", "version": "1"},
+		"clientInfo":      map[string]any{"name": "hainguyen0207-agent", "version": "1"},
 	}, &initRes); err != nil {
 		proc.Process.Kill()
 		return nil, fmt.Errorf("initialize %s: %w", name, err)
