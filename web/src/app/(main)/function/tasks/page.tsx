@@ -3129,6 +3129,8 @@ function CreateTaskSheet({
   const [categoryID, setCategoryID] = React.useState<number | undefined>(undefined);
   const [description, setDescription] = React.useState("");
   const [goal, setGoal] = React.useState("");
+  const [scope, setScope] = React.useState("");
+  const [outOfScope, setOutOfScope] = React.useState("");
   const [selectedTemplateID, setSelectedTemplateID] = React.useState<number | null>(null);
   const [profiles, setProfiles] = React.useState<LLMProfile[]>([]);
   const [companies, setCompanies] = React.useState<Company[]>([]);
@@ -3199,11 +3201,26 @@ function CreateTaskSheet({
     try {
       const timeoutSec = Math.max(0, Math.floor(Number(timeoutMin) || 0)) * 60;
       const heartbeatSec = Math.max(10, Math.floor(Number(heartbeatMin) || 10)) * 60; // Minimum 10 minutes, matching backend normalization.
+      const scopeLines = scope.split("\n").map((v) => v.trim()).filter(Boolean);
+      const outLines = outOfScope.split("\n").map((v) => v.trim()).filter(Boolean);
+      const composedGoal = [
+        goal.trim(),
+        scopeLines.length ? "## IN-SCOPE (chỉ test trong phạm vi này)\n" + scopeLines.join("\n") : "",
+        outLines.length ? "## OUT-OF-SCOPE (TUYỆT ĐỐI KHÔNG đụng tới)\n" + outLines.join("\n") : "",
+      ].filter(Boolean).join("\n\n");
+      // Out-of-scope -> hard block rules: the asset intercept gate blocks these regardless of the agent.
+      const outRules: AssetInterceptRuleInput[] = outLines.map((line) => ({
+        enabled: true,
+        action: "block",
+        kind: /^https?:\/\//i.test(line) ? "exact_url" : "fuzzy_domain",
+        pattern: line,
+        note: "out-of-scope (auto)",
+      }));
       const created = await api.createTask({
         name: name.trim(),
         categoryId: categoryID,
         description: description.trim(),
-        goal: goal.trim(),
+        goal: composedGoal,
         llmProfileIds: llmProfileIDs.map(Number),
         sourceTaskIds: sourceTaskIDs,
         companyIds: companyIDs,
@@ -3214,7 +3231,7 @@ function CreateTaskSheet({
         reconWorkflow,
         planHeartbeatSeconds: heartbeatSec,
         coverageEnabled,
-        interceptRules: interceptRules
+        interceptRules: [...interceptRules, ...outRules]
           .map((r) => ({ ...r, pattern: r.pattern.trim() }))
           .filter((r) => r.pattern !== ""),
       });
@@ -3233,6 +3250,8 @@ function CreateTaskSheet({
       setCategoryID(undefined);
       setDescription("");
       setGoal("");
+      setScope("");
+      setOutOfScope("");
       setSelectedTemplateID(null);
       setSourceTaskIDs([]);
       setCompanyIDs([]);
@@ -3351,6 +3370,26 @@ function CreateTaskSheet({
                 placeholder={swt("interface.m1036")}
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="scope">In-scope (mỗi dòng 1 domain/host/URL)</Label>
+              <Textarea
+                id="scope"
+                className="min-h-24"
+                placeholder={"example.com\napi.example.com\nhttps://app.example.com/login"}
+                value={scope}
+                onChange={(e) => setScope(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="out-of-scope">Out-of-scope (cấm — mỗi dòng 1 mục; tự chặn cứng)</Label>
+              <Textarea
+                id="out-of-scope"
+                className="min-h-24"
+                placeholder={"admin.example.com\nhttps://example.com/logout\nthirdparty.com"}
+                value={outOfScope}
+                onChange={(e) => setOutOfScope(e.target.value)}
               />
             </div>
             <Field>
