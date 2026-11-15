@@ -292,7 +292,8 @@ func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
 		}
 		ctx, cancel := context.WithTimeout(s.ctx, reconFirstMaxWait)
 		defer cancel()
-		for _, wf := range s.resolveReconWorkflows(ctx, strings.TrimSpace(req.ReconWorkflow)) {
+		var firstWS string
+		for i, wf := range s.resolveReconWorkflows(ctx, strings.TrimSpace(req.ReconWorkflow)) {
 			runID, err := s.reconStartRun(ctx, target, wf, maxWorkflowVars(ctx, wf))
 			if err != nil {
 				s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
@@ -302,8 +303,47 @@ func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
 			registerPushBack(runID, t.ID)
 			s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
 				Summary: fmt.Sprintf("Recon (song song): %s (run %s) dang chay nen - ket qua se tu day vao task.", wf, runID)})
+			// wait for the discovery workflow so we can chain the vhost matrix off
+			// its subdomain output; the agent keeps running in parallel meanwhile.
+			if err := s.reconWaitDone(ctx, runID); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				continue
+			}
+			if i == 0 {
+				firstWS = s.reconRunWorkspace(ctx, runID)
+			}
+		}
+		// Chain workflow 05 (active VHOST MATRIX: sweep names x IPs → live vhosts +
+		// port-scan) off the discovery run's full subdomain list, then push back.
+		if firstWS != "" {
+			vars := []string{"subdomains_list=" + firstWS + "/subdomains_all.txt", "vhost_all_names=true"}
+			run05, err := s.reconStartRun(ctx, target, "05-scan-hosts.yaml", vars)
+			if err != nil {
+				s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+					Summary: fmt.Sprintf("Recon (song song): vhost matrix (05) khong khoi dong duoc (%s).", err.Error())})
+				return
+			}
+			registerPushBack(run05, t.ID)
+			s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+				Summary: fmt.Sprintf("Recon (song song): VHOST MATRIX 05 (run %s) dang chay - vhost song se tu day vao task.", run05)})
 		}
 	}()
+}
+
+// reconRunWorkspace returns a finished run's workspace directory (where its output
+// files live), or "" if it can't be resolved.
+func (s *Server) reconRunWorkspace(ctx context.Context, runID string) string {
+	data, code, err := s.reconJSON(ctx, "GET", "/api/v1/runs/"+runID, nil)
+	if err != nil || code >= 300 {
+		return ""
+	}
+	var r struct {
+		Workspace string `json:"workspace"`
+	}
+	_ = json.Unmarshal(data, &r)
+	return strings.TrimSpace(r.Workspace)
 }
 
 // resolveReconWorkflows turns the recon_workflow spec into a concrete list:
