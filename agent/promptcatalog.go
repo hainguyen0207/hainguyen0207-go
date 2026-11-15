@@ -93,19 +93,16 @@ First **accurately extract task_id, the exploration node_id, and the standalone 
 4. **Write the report**: synthesize the above and write a structured Markdown report (see the template below).
 5. **Save**: call **update_finding_report(finding_id=<node_id>, report=<full Markdown>, evidence_version=<the version actually read>)** to save it; omit evidence_version when you didn't read a version, and do not guess. This is your final product — not writing it in means it wasn't done.
 
-━━ Report structure (Markdown, trim as needed, but evidence/reproduction/remediation are required) ━━
-- ` + "`## Overview`" + `: state in one sentence what the vulnerability is, where it is, and what it can cause.
-- ` + "`## Impact and harm`" + `: explain the worst-case consequences in business terms (data leak/takeover/RCE/lateral movement…), and give a **severity** judgment with reasons.
-- ` + "`## Affected scope`" + `: the affected assets/interfaces/parameters/versions.
-- ` + "`## Reproduction steps`" + `: **step-by-step, reproducible** operations (requests/commands/parameters); paste the PoC if you can.
-- ` + "`## Evidence`" + `: the key request/response fragments, command output, echoes, and screenshot descriptions that prove the vulnerability is real — paste the originals in code blocks.
-- ` + "`## PoC`" + `: directly runnable/reusable exploit code or payload (exploit script, request message, command line, payload string), **usually giving the full code in a code block**, with a brief note on how to run it; when there is no standalone exploit code, state "the reproduction steps are the PoC".
-- ` + "`## Root-cause analysis`" + `: why this vulnerability exists (missing validation/dangerous function/misconfiguration…).
-- ` + "`## Remediation advice`" + `: specific, actionable fixes (not empty words), optionally including hardening and long-term recommendations.
+━━ Report structure (Markdown) — write EXACTLY these four top-level sections, in this order, with these headings ━━
+Fold the supporting detail (affected scope, evidence, PoC, root cause) INTO the right section — never drop it, and do not add other top-level sections.
+- ` + "`## Description`" + `: what the vulnerability is, its exact location (asset / endpoint / parameter / method), the bug class (CWE or OWASP category when identifiable), and WHY it exists — the root cause (missing validation / dangerous function / misconfiguration / broken access control…). Two to five precise sentences.
+- ` + "`## Impact`" + `: the concrete worst-case consequence in business terms (data leak / account takeover / RCE / lateral movement / privilege escalation…), WHO or WHAT is affected (the affected assets / interfaces / parameters / versions), and a closing **Severity:** line (CRITICAL | HIGH | MEDIUM | LOW) — add a CVSS 3.1 vector and score when derivable — with a one-line justification. Impact must follow from the evidence, never from speculation.
+- ` + "`## Steps to Reproduce`" + `: numbered, deterministic steps a third party can follow from scratch — preconditions → the exact requests/commands with real values → the observed result that proves the bug. Paste the REAL request/response fragments, command output, or echoes in fenced code blocks at the step where they occur (this is your evidence). End with the runnable PoC in a fenced code block — full exploit script / payload / command line, plus a one-line note on how to run it; if the steps themselves are the PoC, say so. Every request/response you paste must be real captured traffic — never fabricated.
+- ` + "`## Solution`" + `: specific, actionable remediation that fixes the ROOT CAUSE (the exact validation / access-control / configuration change a developer must make), then optional short defense-in-depth hardening. No empty words — a developer must be able to act on it directly.
 
 ━━ Discipline ━━
 - **Base everything on real evidence**: every line in the report must be supportable from the finding evidence or the work's execution process; **never fabricate** requests, responses, CVEs, or conclusions. Where evidence is insufficient, truthfully mark it "unverified/needs further confirmation".
-- **Remediation-oriented and verifiable**: the reproduction steps must be reproducible, and the remediation advice must be actionable.
+- **Remediation-oriented and verifiable**: the Steps to Reproduce must actually reproduce, and the Solution must be concretely actionable.
 - **Concise**: no boilerplate or filler, and don't restate the template itself.
 - Use the selected output language throughout. When done (update_finding_report called successfully), finish, stating in one or two sentences which vulnerability you wrote the report for.`
 
