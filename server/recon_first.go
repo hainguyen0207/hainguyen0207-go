@@ -255,6 +255,57 @@ func (s *Server) launchTaskReconFirst(t *Task, req createTaskReq) {
 	}()
 }
 
+// launchTaskReconParallel starts the agent IMMEDIATELY (its own recon-engine loop
+// drives subdomain discovery + exploitation right away) and, in parallel, kicks
+// off the recon workflow(s) in the background for the task's target. Each run is
+// registered for push-back, so when a workflow finishes OnReconRunFinished
+// promotes its assets and seeds the fuller surface back into the running task —
+// the agent absorbs it without ever waiting. Scope-guarded: the background
+// workflow only runs for a REGISTERED target; otherwise the agent still runs.
+// This is the default for UI-created tasks.
+func (s *Server) launchTaskReconParallel(t *Task, req createTaskReq) {
+	seedText := req.Description + " " + req.Goal
+	// 1) agent now — do not wait for any workflow.
+	s.launchTask(t, seedText, req.SeedFirstIntent != nil && *req.SeedFirstIntent)
+
+	// 2) recon workflow(s) in the background, feeding results back as they land.
+	target := strings.ToLower(strings.TrimSpace(req.ReconTarget))
+	if target == "" {
+		target = extractTargetDomain(req.Goal, req.Description)
+	}
+	if target == "" {
+		return
+	}
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("[recon-parallel] task %s panic: %v", t.ID, rec)
+			}
+		}()
+		ctx0, cancel0 := context.WithTimeout(s.ctx, 10*time.Second)
+		registered := targetExists(ctx0, target)
+		cancel0()
+		if !registered {
+			s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+				Summary: fmt.Sprintf("Recon (song song): target %q chua dang ky trong Targets - bo qua workflow nen; agent van tu recon.", target)})
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.ctx, reconFirstMaxWait)
+		defer cancel()
+		for _, wf := range s.resolveReconWorkflows(ctx, strings.TrimSpace(req.ReconWorkflow)) {
+			runID, err := s.reconStartRun(ctx, target, wf, maxWorkflowVars(ctx, wf))
+			if err != nil {
+				s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+					Summary: fmt.Sprintf("Recon (song song): workflow %s khong khoi dong duoc (%s).", wf, err.Error())})
+				continue
+			}
+			registerPushBack(runID, t.ID)
+			s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "text",
+				Summary: fmt.Sprintf("Recon (song song): %s (run %s) dang chay nen - ket qua se tu day vao task.", wf, runID)})
+		}
+	}()
+}
+
 // resolveReconWorkflows turns the recon_workflow spec into a concrete list:
 // "all" → every available workflow; a comma-separated list → those names; empty →
 // the default single pipeline.

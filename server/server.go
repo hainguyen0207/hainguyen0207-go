@@ -1573,7 +1573,9 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 	if req.ReconFirst == nil || *req.ReconFirst {
 		s.launchTaskReconFirst(t, req)
 	} else {
-		s.launchTask(t, req.Description+" "+req.Goal, req.SeedFirstIntent != nil && *req.SeedFirstIntent)
+		// recon_first:false (UI default) → PARALLEL: agent starts now AND the recon
+		// workflow runs in the background, feeding subdomains back as they land.
+		s.launchTaskReconParallel(t, req)
 	}
 	writeJSON(w, 201, taskDTO(t, s.resolvedTaskStatus(t)))
 }
@@ -3440,7 +3442,7 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 		// Endpoint reconstructor agent: master toggle + allow non-idempotent (write) replay methods. Read per tool call, no agent rebuild needed.
 		EndpointReconstructor *bool `json:"endpoint_reconstructor"`
 		EndpointReplayWrite   *bool `json:"endpoint_replay_write"`
-		LLMRecord           *bool `json:"llm_record"` // LLM recording toggle (off by default); takes effect immediately, no agent rebuild needed
+		LLMRecord             *bool `json:"llm_record"` // LLM recording toggle (off by default); takes effect immediately, no agent rebuild needed
 		// Web search. WebSearchEnabled/Backend toggle the tool + backend; BraveKey/TavilyKey
 		// are optional — omit (null) to leave a stored key untouched, send "" to clear.
 		WebSearchEnabled *bool   `json:"web_search_enabled"`
