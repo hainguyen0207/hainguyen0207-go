@@ -447,10 +447,12 @@ func parseAnthropicFrame(data string) (StreamEvent, bool, error) {
 	case "message_delta":
 		ev := StreamEvent{Type: SEMessageDelta, StopReason: f.Delta.StopReason}
 		if f.Usage != nil {
-			// Only output here — the input side (input/cache) was already counted at
-			// message_start; message_delta re-echoes it, so counting it again would
-			// double the input/cache totals.
-			ev.Usage = Usage{OutputTokens: f.Usage.OutputTokens}
+			// Anthropic re-echoes the input side (input/cache) here after reporting it
+			// at message_start; some Anthropic-compatible gateways (e.g. opencode /
+			// deepseek) send 0 at message_start and the real input ONLY here. Carry
+			// the full usage: the Accumulator folds the input side of a delta with
+			// max() (no double count) and adds only the output.
+			ev.Usage = f.Usage.norm()
 		}
 		return ev, true, nil
 	case "message_stop":

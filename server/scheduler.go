@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -143,8 +144,51 @@ func (sc *Scheduler) fireIntervals(triggers []*db.AgentTrigger) {
 		}
 		_ = sc.pg.TouchTriggerFire(tr.ID)
 		ctx := "\n\n[This is a scheduled trigger]" + now.Format(" 2006-01-02 15:04:05 MST")
-		sc.s.StartTriggeredRun(tr.AgentKey, fmt.Sprintf("scheduled trigger - %s", now.Format("15:04")), tr.IntervalMessage+ctx, 0, false, "", "")
+		// A scheduled run is bound to each task that is actually running, so the
+		// agent gets that task's context (scope, goal, task_id) and can write its
+		// results back into it. With no running task there is nothing to work on:
+		// skip instead of starting a context-less run that only burns tokens.
+		active := sc.activeTasks()
+		if len(active) == 0 {
+			log.Printf("[scheduler] interval trigger %s: no running task, skipped", tr.AgentKey)
+			continue
+		}
+		for _, t := range active {
+			msg := tr.IntervalMessage + ctx + fmt.Sprintf("\n[Bound to running task #%d — pass task_id=%d to task tools]", t.id, t.id)
+			sc.s.StartTriggeredRun(tr.AgentKey, fmt.Sprintf("scheduled trigger - task#%d - %s", t.id, now.Format("15:04")), msg, t.id, true, t.desc, t.goal)
+		}
 	}
+}
+
+type schedTask struct {
+	id         int64
+	desc, goal string
+}
+
+// activeTasks lists tasks that are running now: not paused, not queued, not in
+// a terminal state (done / failed / timeout).
+func (sc *Scheduler) activeTasks() []schedTask {
+	if sc.s == nil || sc.s.m == nil {
+		return nil
+	}
+	var out []schedTask
+	for _, t := range sc.s.m.List() {
+		st := t.lifecycleSnapshot()
+		if st.Paused || st.Queued {
+			continue
+		}
+		switch st.Status {
+		case "done", "failed", "timeout":
+			continue
+		}
+		id, err := strconv.ParseInt(t.ID, 10, 64)
+		if err != nil || id <= 0 {
+			continue
+		}
+		out = append(out, schedTask{id: id, desc: t.Description, goal: t.Goal})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].id < out[j].id })
+	return out
 }
 
 // fireFindings fires on_finding triggers for findings above the persisted
@@ -172,8 +216,8 @@ func (sc *Scheduler) fireFindings(triggers []*db.AgentTrigger) {
 		if len(want) == 0 {
 			continue
 		}
-		msgCtx := fmt.Sprintf("\n\n[Triggered by a finding discovered in a task]\nFinding: [%s/%s] %s",
-			e.VulnClass, e.Severity, e.Summary)
+		msgCtx := fmt.Sprintf("\n\n[Triggered by a finding discovered in task #%d — pass task_id=%d to task tools]\nFinding: [%s/%s] %s",
+			e.TaskID, e.TaskID, e.VulnClass, e.Severity, e.Summary)
 		for _, tr := range want {
 			sc.s.StartTriggeredRun(tr.AgentKey, fmt.Sprintf("finding trigger - task#%d", e.TaskID), tr.FindingMessage+msgCtx, e.TaskID, true, e.TaskDesc, e.TaskGoal)
 		}

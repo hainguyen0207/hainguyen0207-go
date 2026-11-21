@@ -9,6 +9,9 @@ var enrichOnce sync.Map // value → done
 
 // EnrichAssetDNS resolves domain/subdomain assets into IP nodes (best-effort,
 // once per value per process — ScopeWeaver enrich concept, DNS part).
+// enrichSem caps concurrent DNS enrichment workers well below the 8-connection pool.
+var enrichSem = make(chan struct{}, 4)
+
 func (s *Store) EnrichAssetDNS(a Asset) {
 	if a.Type != "domain" && a.Type != "subdomain" && a.Type != "site" {
 		return
@@ -17,6 +20,8 @@ func (s *Store) EnrichAssetDNS(a Asset) {
 		return
 	}
 	go func() {
+		enrichSem <- struct{}{} // bound concurrent lookups+writes (was one goroutine per asset, unbounded)
+		defer func() { <-enrichSem }()
 		ips, err := net.LookupHost(a.Value)
 		if err != nil {
 			return

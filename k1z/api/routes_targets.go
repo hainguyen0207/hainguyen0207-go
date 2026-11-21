@@ -48,9 +48,17 @@ func (s *Server) handleListTargets(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, 500, err.Error())
 		return
 	}
+	names := make([]string, 0, len(targets))
+	for _, t := range targets {
+		names = append(names, t.Name)
+	}
+	sums, _ := s.St.TargetSummaries(names) // 2 queries for the whole page
 	items := []map[string]any{}
 	for _, t := range targets {
-		sum, _ := s.St.TargetSummary(t.Name)
+		sum, ok := sums[t.Name]
+		if !ok || sum.BySeverity == nil {
+			sum = store.TargetSummary{BySeverity: map[string]int{}}
+		}
 		items = append(items, targetWithSummary(t, sum))
 	}
 	writeJSON(w, 200, map[string]any{"total": len(items), "items": items})

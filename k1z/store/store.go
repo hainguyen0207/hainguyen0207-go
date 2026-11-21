@@ -1649,6 +1649,88 @@ func (s *Store) TargetSummary(name string) (TargetSummary, error) {
 	return sum, rows.Err()
 }
 
+// TargetSummaries computes TargetSummary for many targets with two queries in
+// total (runs grouped by target, open vulns grouped by host+severity) instead of
+// four per target, which on a large findings table meant two full scans per
+// target and multi-second Targets page loads. Matching keeps TargetSummary's
+// semantics: a finding counts for a target when host == name or host ends with
+// "."+name (so nested targets each count it).
+func (s *Store) TargetSummaries(names []string) (map[string]TargetSummary, error) {
+	out := make(map[string]TargetSummary, len(names))
+	want := make(map[string]bool, len(names))
+	for _, n := range names {
+		out[n] = TargetSummary{BySeverity: map[string]int{}}
+		want[n] = true
+	}
+	rows, err := s.db.Query(`SELECT target, id, created_at, status FROM runs ORDER BY created_at DESC, id DESC`)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var target, id string
+		var created any
+		var status sql.NullString
+		if err := rows.Scan(&target, &id, &created, &status); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if !want[target] {
+			continue
+		}
+		sum := out[target]
+		if sum.TotalRuns == 0 { // newest run (ordered DESC)
+			rid := id
+			sum.LastRunID = &rid
+			if t := parseDBTime(created); !t.IsZero() {
+				sum.LastRunAt = &t
+			}
+			if status.Valid {
+				st := status.String
+				sum.LastStatus = &st
+			}
+		}
+		sum.TotalRuns++
+		out[target] = sum
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return out, err
+	}
+	rows.Close() // release the connection before the next query
+
+	frows, err := s.db.Query(`SELECT COALESCE(host,''), COALESCE(severity,'info'), count(*) FROM findings
+		WHERE kind='vuln' AND status='open' GROUP BY host, severity`)
+	if err != nil {
+		return out, err
+	}
+	defer frows.Close()
+	for frows.Next() {
+		var host, sev string
+		var n int
+		if err := frows.Scan(&host, &sev, &n); err != nil {
+			return out, err
+		}
+		if host == "" {
+			continue
+		}
+		// host itself and every parent domain of it are candidate targets.
+		for h := host; h != ""; {
+			if want[h] {
+				sum := out[h]
+				sum.OpenVulns += n
+				sum.BySeverity[sev] += n
+				out[h] = sum
+			}
+			i := strings.IndexByte(h, '.')
+			if i < 0 {
+				break
+			}
+			h = h[i+1:]
+		}
+	}
+	return out, frows.Err()
+}
+
 // RunStats aggregates the dashboard numbers.
 type RunStatsData struct {
 	FindingsTotal int

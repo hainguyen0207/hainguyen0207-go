@@ -97,7 +97,11 @@ func Match(f Filter, s Snapshot) bool {
 	if s.Kind == EventFindingStatusChanged && !f.OnStatusChange {
 		return false
 	}
-	if !AtLeast(s.Severity, f.MinSeverity) {
+	sev := s.Severity
+	if s.Kind == EventFindingReportReady && SeverityRank(s.FiledSeverity) > SeverityRank(sev) {
+		sev = s.FiledSeverity // verified-but-downgraded: filter on the filed severity
+	}
+	if !AtLeast(sev, f.MinSeverity) {
 		return false
 	}
 	if len(f.TaskIDs) > 0 && !slices.Contains(f.TaskIDs, s.TaskID) {

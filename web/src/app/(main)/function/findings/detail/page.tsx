@@ -14,7 +14,9 @@ import { toast } from "sonner";
 import { CopyButton } from "@/components/copy-button";
 import { FindingRetestPanel } from "@/components/finding-retest-panel";
 import { FindingTrafficPanel } from "@/components/finding-traffic-panel";
-import { Markdown } from "@/components/markdown";
+import { BilingualView } from "@/components/bilingual-view";
+import { FindingValidationPanel } from "@/components/finding-validation-panel";
+import { Markdown, extractHttpRequests } from "@/components/markdown";
 import { StatusBadge } from "@/components/status-badge";
 import { VerificationBadge } from "@/components/verification-badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -208,7 +210,16 @@ function FindingDetailInner() {
               <Card>
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle className="text-sm">{swt("interface.m0344")}</CardTitle>
-                  {finding.report && <CopyButton text={finding.report} successMessage={swt("interface.m0345")} />}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {extractHttpRequests(finding.report).length > 0 && (
+                      <CopyButton
+                        text={extractHttpRequests(finding.report).join("\n\n")}
+                        label={`Copy ${extractHttpRequests(finding.report).length} HTTP request`}
+                        successMessage="Đã copy các HTTP request"
+                      />
+                    )}
+                    {finding.report && <CopyButton text={finding.report} successMessage={swt("interface.m0345")} />}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {finding.report_stale ? (
@@ -217,12 +228,19 @@ function FindingDetailInner() {
                     </Alert>
                   ) : null}
                   {finding.report ? (
-                    <Markdown text={finding.report} />
+                    finding.finding_id ? (
+                      <BilingualView kind="finding_report" refId={finding.finding_id}>
+                        <Markdown text={finding.report} />
+                      </BilingualView>
+                    ) : (
+                      <Markdown text={finding.report} />
+                    )
                   ) : (
                     <p className="text-sm text-muted-foreground">{swt("interface.m0347")}</p>
                   )}
                 </CardContent>
               </Card>
+              <FindingValidationPanel findingId={id} />
             </div>
 
             {/* Right status column. */}

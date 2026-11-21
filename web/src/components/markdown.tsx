@@ -5,6 +5,31 @@ import * as React from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { CopyButton } from "@/components/copy-button";
+
+// Plain text of a hast node (code block contents for the copy button).
+function hastText(n: unknown): string {
+  const x = n as { type?: string; value?: string; children?: unknown[] };
+  if (!x) return "";
+  if (x.type === "text") return x.value || "";
+  return (x.children || []).map(hastText).join("");
+}
+
+// extractHttpRequests returns every raw HTTP request found in ```http fenced
+// blocks of a Markdown text (blocks whose first line is "METHOD /path HTTP/x"),
+// i.e. the copy-paste-ready requests the reporter/validator write.
+export function extractHttpRequests(md: string | null | undefined): string[] {
+  if (!md) return [];
+  const out: string[] = [];
+  const re = /```http[^\n]*\n([\s\S]*?)```/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(md))) {
+    const body = m[1].replace(/\s+$/, "");
+    if (/^[A-Z]+ \S+ HTTP\/[0-9.]+/.test(body.trimStart())) out.push(body.trimStart());
+  }
+  return out;
+}
+
 // Tailwind-styled element overrides (no typography plugin in this project, so we
 // style each element). `node` is stripped — it's not a valid DOM attribute.
 const components: Components = {
@@ -23,8 +48,18 @@ const components: Components = {
   blockquote: ({ node, ...p }) => (
     <blockquote className="my-1 border-l-2 border-border pl-2.5 text-muted-foreground" {...p} />
   ),
+  // Code blocks get a copy button (requests, responses, curl commands).
   pre: ({ node, ...p }) => (
-    <pre className="my-1.5 overflow-auto rounded-md bg-muted/70 p-2.5 text-xs leading-relaxed" {...p} />
+    <div className="group relative my-1.5">
+      <pre className="overflow-auto rounded-md bg-muted/70 p-2.5 pr-10 text-xs leading-relaxed" {...p} />
+      <CopyButton
+        text={hastText(node).replace(/\n$/, "")}
+        size="icon"
+        variant="ghost"
+        label=""
+        className="absolute top-1 right-1 size-7 opacity-60 group-hover:opacity-100"
+      />
+    </div>
   ),
   code: ({ node, className, children, ...rest }) => {
     const block = /language-/.test(className || "");

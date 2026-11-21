@@ -36,6 +36,11 @@ type Snapshot struct {
 	// Verification is the validation-gate status line shown with the report
 	// (e.g. "✅ Verified by validator" / "⚠️ Unverified: ...").
 	Verification string `json:"verification,omitempty"`
+	// FiledSeverity is the severity the finding was reported with, set only when a
+	// validator-confirmed severity differs. Channel severity filters use the higher
+	// of the two, so a verified finding filed above the threshold is still
+	// delivered after a downgrade (it is rendered with the confirmed severity).
+	FiledSeverity string `json:"filed_severity,omitempty"`
 }
 
 // Item is a single vulnerability to be pushed, for channel rendering.

@@ -1030,6 +1030,10 @@ type intentItem struct {
 	AssetIDs  []json.RawMessage `json:"asset_ids"`
 	ParentIDs []json.RawMessage `json:"parent_ids"`
 	Priority  int               `json:"priority"`
+	// FromHints records which hint node(s) (overview.hints[].id) inspired this
+	// intent — provenance only (hint -> intent -> finding tracking); invalid ids
+	// are dropped, never an error.
+	FromHints []json.RawMessage `json:"from_hints"`
 }
 
 // addOneIntent creates one intent node, links its upstream lineage, and returns its id.
@@ -1075,6 +1079,15 @@ func (t *ToolSet) addOneIntent(it intentItem) (int64, error) {
 	if len(anchors) > 0 {
 		payload["asset_ids"] = anchors
 	}
+	var fromHints []int64
+	for _, h := range pidList(it.FromHints) {
+		if n, err := t.ts.GetNode(h); err == nil && n != nil && n.Kind == db.KindHint {
+			fromHints = append(fromHints, h)
+		}
+	}
+	if len(fromHints) > 0 {
+		payload["from_hints"] = fromHints
+	}
 	id, err := t.ts.AddIntent(payload, priority, anchors, "planner")
 	if err != nil {
 		return 0, err
@@ -1099,7 +1112,8 @@ func (t *ToolSet) addIntent() actool.CoreTool {
 	return t.writeExpTool("add_intent", "Create exploration directions in the frontier and link them into the exploration graph. Intents are open-ended: describe what to explore/verify/exploit in one summary sentence.\n"+
 		"Prefer batching: submit this round's new directions together in intents. Returned ids match input length/order; failed items have id=0 and details in errors. For one item, omit intents and provide top-level summary.",
 		obj(map[string]any{
-			"intents":    map[string]any{"type": "array", "description": "Preferred: new directions processed in order. Each item uses summary/asset_ids/parent_ids/priority. Returned ids match input length/order.", "items": map[string]any{"type": "object"}},
+			"intents":    map[string]any{"type": "array", "description": "Preferred: new directions processed in order. Each item uses summary/asset_ids/parent_ids/priority/from_hints. Returned ids match input length/order.", "items": map[string]any{"type": "object"}},
+			"from_hints": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Hint node IDs (overview hints[].id) this direction comes from — e.g. a KB-LEAD hint. Always set it when an intent acts on a hint, so the task can track which hints produced work and findings. Not an anchor: still give parent_ids/asset_ids as usual."},
 			"summary":    str("Single item: one sentence describing what to do and why. A clear direction does not require an asset ID."),
 			"asset_ids":  map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Target asset IDs from list_assets, not exploration node IDs (zero/one/many). Include IDs whenever the direction targets concrete sites/endpoints/parameters/hosts: they identify targets, support coverage deduplication, and connect asset lineage. Leave empty only for global reconnaissance with no concrete asset."},
 			"parent_ids": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Optional upstream anchors (zero/one/many): existing confirmed fact/finding node IDs supporting this direction. Never use intent/goal/hint IDs. Include all combined facts. Leave empty for new top-level reconnaissance; it attaches automatically to the task's origin fact."},

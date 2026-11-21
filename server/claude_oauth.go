@@ -17,9 +17,12 @@ package server
 // and can get the account BANNED. Opt-in, operator-authorized.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -350,6 +353,18 @@ func writeLocalClaudeCreds(path string, c claudeSubCreds) error {
 
 var claudeRefresherOnce sync.Once
 
+// lastClaudeTokenFP is a fingerprint (sha256 prefix, never the token itself) of
+// the on-disk Claude Code access token last seen by the refresher loop.
+var lastClaudeTokenFP string
+
+func claudeTokenFingerprint(tok string) string {
+	if tok == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(tok))
+	return hex.EncodeToString(sum[:8])
+}
+
 // ensureClaudeRefresher lazily starts a goroutine that keeps every claude-sub
 // profile's token fresh (refresh near expiry → persist → invalidate the provider
 // cache), so a long-running task never hits an expired subscription token.
@@ -373,6 +388,19 @@ func (s *Server) refreshClaudeSubProfiles() {
 	// would revoke the CLI's. Providers read the live file token at build time.
 	if blob, path, ok := readLocalClaudeCreds(); ok {
 		c, _ := parseClaudeSubCreds(blob)
+		// Providers capture the access token when they are built and are cached per
+		// profile. When the Claude Code CLI rotates the login on disk (it refreshes on
+		// its own schedule and REVOKES the old token), a cached provider keeps sending
+		// the revoked token -> 401 "OAuth access token has been revoked" (seen on the
+		// reporter's Opus profile). Detect any change of the on-disk token, whoever
+		// made it, and rebuild the providers.
+		if fp := claudeTokenFingerprint(c.AccessToken); fp != "" && fp != lastClaudeTokenFP {
+			if lastClaudeTokenFP != "" {
+				log.Printf("[claude-sub] login token changed on disk; rebuilding LLM providers")
+				s.invalidateProfileAgents()
+			}
+			lastClaudeTokenFP = fp
+		}
 		if c.RefreshToken == "" || time.Now().Unix() <= c.ExpiresAt-claudeRefreshMargin {
 			return // no refresh token, or still fresh (the CLI or we refreshed it)
 		}

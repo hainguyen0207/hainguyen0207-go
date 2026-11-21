@@ -114,6 +114,18 @@ func (u *Usage) Add(o Usage) {
 	u.CacheWriteTokens += o.CacheWriteTokens
 }
 
+// mergeDelta folds a message_delta usage: output adds up, while the input side
+// (input/cache read/cache write) is a cumulative re-statement of what
+// message_start reported — take the larger of the two instead of summing, so
+// providers that only report input at the delta are counted and providers that
+// report it in both are not double-counted.
+func (u *Usage) mergeDelta(o Usage) {
+	u.OutputTokens += o.OutputTokens
+	u.InputTokens = max(u.InputTokens, o.InputTokens)
+	u.CacheReadTokens = max(u.CacheReadTokens, o.CacheReadTokens)
+	u.CacheWriteTokens = max(u.CacheWriteTokens, o.CacheWriteTokens)
+}
+
 // ToolSchema is a tool definition exposed to the model.
 type ToolSchema struct {
 	Name        string         `json:"name"`

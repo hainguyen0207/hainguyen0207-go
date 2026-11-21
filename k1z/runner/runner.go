@@ -195,8 +195,11 @@ func (r *Runner) RecoverOrphans() {
 	}
 }
 
-// maxAutoResume caps how many times one run is auto-resumed after a restart.
-const maxAutoResume = 2
+// maxAutoResume caps how many CONSECUTIVE auto-resumes a run gets without making
+// progress (no newly completed step since the previous resume). A deploy or reboot
+// during a run that keeps advancing never hits it; a run that itself kills the
+// worker before finishing another step does, and is then marked failed.
+const maxAutoResume = 3
 
 // autoResumeOrphan re-arms an orphaned 'running' run for execution from its last
 // completed step: non-terminal steps -> pending, status -> queued, resume=true.
@@ -209,15 +212,28 @@ func (r *Runner) autoResumeOrphan(run *store.Run) bool {
 	if _, err := os.Stat(run.Workspace); err != nil {
 		return false
 	}
+	// Marker: "<consecutive resumes> <completed steps at the last resume>". An old
+	// single-number marker has no step count, so progress is unknown -> treated as
+	// progress (reset), which is the safe side for a run that was clearly advancing.
 	marker := filepath.Join(run.Workspace, ".auto_resume_count")
-	n := 0
+	n, lastOK := 0, -1
 	if b, err := os.ReadFile(marker); err == nil {
-		_, _ = fmt.Sscanf(strings.TrimSpace(string(b)), "%d", &n)
+		f := strings.Fields(string(b))
+		if len(f) >= 1 {
+			_, _ = fmt.Sscanf(f[0], "%d", &n)
+		}
+		if len(f) >= 2 {
+			_, _ = fmt.Sscanf(f[1], "%d", &lastOK)
+		}
+	}
+	ok := completedSteps(run.Workspace)
+	if ok > lastOK {
+		n = 0 // finished new steps since the last resume: interrupted, not stuck
 	}
 	if n >= maxAutoResume {
 		return false
 	}
-	_ = os.WriteFile(marker, []byte(fmt.Sprintf("%d\n", n+1)), 0o644)
+	_ = os.WriteFile(marker, []byte(fmt.Sprintf("%d %d\n", n+1, ok)), 0o644)
 	_ = os.Remove(filepath.Join(run.Workspace, "pause.flag"))
 	var steps []map[string]any
 	_ = json.Unmarshal([]byte(run.StepsJSON), &steps)
@@ -233,6 +249,30 @@ func (r *Runner) autoResumeOrphan(run *store.Run) bool {
 		"resume": true, "finished_at": nil, "paused_at": nil, "steps_json": string(b),
 	})
 	return true
+}
+
+// completedSteps counts the steps the workflow engine recorded as finished OK in
+// the run's resume.json (the file Resume skips from). -1 when unreadable.
+func completedSteps(ws string) int {
+	b, err := os.ReadFile(filepath.Join(ws, "resume.json"))
+	if err != nil {
+		return -1
+	}
+	var rf struct {
+		Steps map[string]struct {
+			Status string `json:"status"`
+		} `json:"steps"`
+	}
+	if json.Unmarshal(b, &rf) != nil {
+		return -1
+	}
+	n := 0
+	for _, st := range rf.Steps {
+		if st.Status == "ok" {
+			n++
+		}
+	}
+	return n
 }
 
 // ── launch ───────────────────────────────────────────────────────────────────

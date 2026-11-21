@@ -1119,6 +1119,18 @@ func (e *Engine) runIntent(ctx context.Context, t *Task, name string, worker *ag
 		}
 		return true
 	}
+	// The backend is shutting down (SIGTERM: restart / deploy / reboot): this run
+	// was interrupted, it did not fail. Return the intent to the frontier so it runs
+	// again after restart, as AbortShutdown documents. Without this, a graceful stop
+	// let the run fall through to the error path and park the intent as "blocked",
+	// which nothing re-opens on boot (only "running" intents are reset).
+	if ectx.Err() != nil && taskExecutionShutdown(context.Cause(ectx)) {
+		if err := transitionIntentState(t.Store, intent.ID, "running", "open"); err != nil {
+			log.Printf("[worker %s] task %s failed to return intent #%d to open on shutdown: %v", name, t.ID, intent.ID, err)
+		}
+		log.Printf("[worker %s] task %s intent #%d interrupted by shutdown, returned to open (wrote back %s)", name, t.ID, intent.ID, wrote)
+		return true
+	}
 	// the task-timeout hard backstop cancel (not pause, not kill) cancelled this run → classify as
 	// exhausted (settled), don't mislabel it blocked. By now the worker has usually written its
 	// results back during the settlement phase.
@@ -1234,6 +1246,13 @@ func (e *Engine) runDetachedIntent(ctx context.Context, t *Task, intentID int64,
 		e.runIntent(ctx, t, "chat", worker, node, requestID, agentMessage)
 	}()
 	return nil
+}
+
+// taskExecutionShutdown reports whether a run was cancelled because the backend
+// process is shutting down (agent.AbortShutdown).
+func taskExecutionShutdown(cause error) bool {
+	var abort *agent.AbortCause
+	return errors.As(cause, &abort) && abort.Code == agent.AbortShutdown.Code
 }
 
 func taskExecutionPaused(cause error) bool {

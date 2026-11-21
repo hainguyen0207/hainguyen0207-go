@@ -209,7 +209,7 @@ VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
 		return 0, err
 	}
 	for _, a := range anchors {
-		if _, err := tx.Exec(`INSERT INTO exploration_anchors(node_id, asset_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, id, a); err != nil {
+		if _, err := tx.Exec(`INSERT INTO exploration_anchors(node_id, asset_id) SELECT $1::bigint, $2::bigint WHERE EXISTS (SELECT 1 FROM assets WHERE id=$2::bigint) ON CONFLICT DO NOTHING`, id, a); err != nil {
 			return 0, err
 		}
 	}
@@ -251,7 +251,7 @@ func (s *ExplorationStore) Anchor(nodeID, assetID int64) error {
 	if nodeID <= 0 || assetID <= 0 {
 		return nil
 	}
-	_, err := s.db.Exec(`INSERT INTO exploration_anchors(node_id, asset_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, nodeID, assetID)
+	_, err := s.db.Exec(`INSERT INTO exploration_anchors(node_id, asset_id) SELECT $1::bigint, $2::bigint WHERE EXISTS (SELECT 1 FROM assets WHERE id=$2::bigint) ON CONFLICT DO NOTHING`, nodeID, assetID)
 	return err
 }
 

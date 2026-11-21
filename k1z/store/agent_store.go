@@ -406,14 +406,10 @@ func (s *Store) ListChatMessages(conversationID int64) ([]ChatMessage, error) {
 // ── companies + assets ───────────────────────────────────────────────────────
 
 func (s *Store) UpsertCompany(name string, notes *string) (*Company, error) {
-	existing, err := s.db.Query(`SELECT id FROM companies WHERE name=?`, name)
-	if err == nil {
-		defer existing.Close()
-		if existing.Next() {
-			var id int64
-			_ = existing.Scan(&id)
-			return &Company{ID: id, Name: name}, nil
-		}
+	// QueryRow: do not hold a pooled connection across the INSERT (see UpsertAsset).
+	var existingID int64
+	if err := s.db.QueryRow(`SELECT id FROM companies WHERE name=? LIMIT 1`, name).Scan(&existingID); err == nil {
+		return &Company{ID: existingID, Name: name}, nil
 	}
 	id, err := s.db.insertReturningID(`INSERT INTO companies (name, notes, created_at) VALUES (?,?,?)`, name, notes, SqlNow())
 	if err != nil {
@@ -459,22 +455,24 @@ func (s *Store) UpsertAsset(a *Asset) error {
 	if a.Source == "" {
 		a.Source = "manual"
 	}
-	existing, err := s.db.Query(`SELECT id, meta FROM assets WHERE type=? AND value=?`, a.Type, a.Value)
-	if err != nil {
+	// QueryRow releases its connection before the follow-up write. Holding a Rows
+	// open across the UPDATE/INSERT needed a SECOND pooled connection per call, so
+	// enough concurrent upserts (DNS enrichment of a big subdomain list) took all
+	// 8 connections and then waited forever for a 9th: the whole k1z store, and
+	// every runner API, hung.
+	var id int64
+	err := s.db.QueryRow(`SELECT id FROM assets WHERE type=? AND value=? LIMIT 1`, a.Type, a.Value).Scan(&id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	defer existing.Close()
-	if existing.Next() {
-		var id int64
-		var meta string
-		_ = existing.Scan(&id, &meta)
+	if err == nil {
 		if a.CompanyID != nil {
 			_, _ = s.db.Exec(`UPDATE assets SET company_id=? WHERE id=?`, *a.CompanyID, id)
 		}
 		return nil // dedupe
 	}
 	a.CreatedAt = NowUTC()
-	id, err := s.db.insertReturningID(`INSERT INTO assets (company_id, type, value, meta, source, created_at) VALUES (?,?,?,?,?,?)`,
+	id, err = s.db.insertReturningID(`INSERT INTO assets (company_id, type, value, meta, source, created_at) VALUES (?,?,?,?,?,?)`,
 		a.CompanyID, a.Type, a.Value, a.Meta, a.Source, SqlTime(a.CreatedAt))
 	if err != nil {
 		return err

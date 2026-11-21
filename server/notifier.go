@@ -710,15 +710,21 @@ func (s *Server) queueReportReady(findingID int64, severity, verification string
 		return
 	}
 	sev := strings.ToLower(strings.TrimSpace(severity))
+	filed := strings.ToLower(strings.TrimSpace(filedSev))
 	if sev == "" {
-		sev = filedSev
+		sev = filed
+	}
+	var filedOverride string
+	if sev != filed && filed != "" {
+		filedOverride = filed
+		verification += " · severity " + filed + " → " + sev
 	}
 	var assets []int64
 	_ = json.Unmarshal(assetsRaw, &assets)
 	if _, err := s.m.pg.AddNotificationEvent(ctx, notify.EventFindingReportReady, findingID, notify.Snapshot{
 		Kind: notify.EventFindingReportReady, FindingID: findingID, TaskID: taskID, TaskName: taskName,
 		VulnClass: vulnclass, Name: name, Severity: sev, Summary: summary, AssetIDs: assets, Report: report,
-		Verification: verification,
+		Verification: verification, FiledSeverity: filedOverride,
 	}); err != nil {
 		log.Printf("[notify] report-ready: queue event finding=%d failed: %v", findingID, err)
 		return

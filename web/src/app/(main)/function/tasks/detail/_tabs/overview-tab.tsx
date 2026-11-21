@@ -23,6 +23,7 @@ import {
   XIcon,
 } from "lucide-react";
 
+import { HintProvenanceCard } from "@/components/hint-provenance-card";
 import { StatusBadge } from "@/components/status-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TaskRoleLLM, VALIDATOR_ROLE_DESC, VALIDATOR_ROLES } from "@/components/task-role-llm";
@@ -510,6 +511,7 @@ export function OverviewTab({ taskId }: { taskId: string }) {
           )}
         </CardContent>
       </Card>
+      <HintProvenanceCard taskId={taskId} />
       {/* Manage task objectives. Additions/edits notify the planner and reactivate the task; deletion only notifies. Objectives are final verifiable outcomes, not attack steps or reconnaissance actions. */}
       <Card>
         <CardHeader>

@@ -90,7 +90,7 @@ export function fmtTime(ts: string) {
   });
 }
 
-const COLUMN_COUNT = 9;
+const COLUMN_COUNT = 10;
 
 interface FindingsTableProps {
   items: Finding[];
@@ -163,7 +163,8 @@ export function FindingsTable({
           <TableHead className="w-20">{swt("interface.m0321")}</TableHead>
           <TableHead>{swt("interface.m0322")}</TableHead>
           <TableHead className="w-44">{swt("interface.m0222")}</TableHead>
-          <TableHead className="w-28">{swt("interface.m0191")}</TableHead>
+          <TableHead className="w-36">{swt("interface.m0191")}</TableHead>
+          <TableHead className="w-40">Xác minh</TableHead>
           <TableHead className="w-32">{swt("interface.m0323")}</TableHead>
           <TableHead className="w-24">{swt("interface.m0291")}</TableHead>
           <TableHead className="w-48">{swt("interface.m0228")}</TableHead>
@@ -260,7 +261,9 @@ export function FindingsTable({
                   ) : (
                     <StatusBadge domain="finding" value={f.status} dot />
                   )}
-                  <VerificationBadge v={f.verification} className="mt-1" />
+                </TableCell>
+                <TableCell>
+                  <VerificationBadge v={f.verification} />
                 </TableCell>
                 <TableCell>
                   {f.task_id ? (

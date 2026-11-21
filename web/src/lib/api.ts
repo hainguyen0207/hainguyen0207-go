@@ -23,6 +23,8 @@ import type {
   AssetInterceptRuleInput,
   TaskCredential,
   TaskCredentialInput,
+  FindingValidation,
+  HintStats,
   Audit,
   BatchCategoryItem,
   BatchControlItem,
@@ -439,6 +441,22 @@ export const api = {
   toggleTaskInterceptRule: (id: string, ruleId: number, enabled: boolean) =>
     post<{ ok: boolean; enabled: boolean }>(`/tasks/${id}/intercept-rules/${ruleId}/toggle`, { enabled }),
 
+  // Hint -> intent -> finding provenance for a task.
+  taskHintStats: (id: string) => get<HintStats>(`/tasks/${encodeURIComponent(id)}/hint-stats`),
+  // On-demand Vietnamese translation (cached server-side per source hash).
+  getTranslation: (kind: string, id: number | string) =>
+    get<{ content: string; stale?: boolean; model?: string }>(
+      `/translations?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(String(id))}`,
+    ),
+  createTranslation: (kind: string, id: number | string) =>
+    post<{ content: string; cached?: boolean; model?: string }>(
+      `/translations?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(String(id))}`,
+    ),
+  // Finding-validation rounds (validator/escalator output), newest first.
+  findingValidations: (id: string) =>
+    get<{ validations: FindingValidation[] | null }>(`/exploration/findings/${encodeURIComponent(id)}/validations`).then((r) =>
+      arr(r.validations),
+    ),
   // Per-task finding-validation gate toggle.
   setTaskVerifyFindings: (id: string, enabled: boolean) =>
     post<{ ok: boolean; verify_findings: boolean }>(`/tasks/${id}/verify-findings`, { enabled }),

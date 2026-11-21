@@ -415,10 +415,15 @@ func (d *DB) seedDefaultInterceptRules() error {
 			priority: 100,
 		},
 		{
-			name:     "[built-in] delete critical system directory",
-			target:   "tool_input",
-			typ:      "regex",
-			pattern:  `\brm\b[^"'\n]{0,60}["'\s](/|/etc|/bin|/usr|/boot|/var|/lib|/sys|/proc|/dev|/sbin|/root)`,
+			name:   "[built-in] delete critical system directory",
+			target: "tool_input",
+			typ:    "regex",
+			// The critical path must be an ARGUMENT of this same rm (no ; & | or line
+			// break between; in the JSON subject a line break is the two chars \n), and
+			// must be a system root or under one. The old pattern matched any "/..." within
+			// 60 chars of rm (e.g. "rm -f cj.txt && curl -o /dev/null"): 94/94 historical
+			// denials were false positives, and it missed rm at the start of a script line.
+			pattern:  `(?:\\[nt]|\b)rm\s+(?:[^\s;&|"'\\]+\s+)*?\\?["']?(?:/\*?|/(?:etc|bin|sbin|usr|boot|lib|lib32|lib64|sys|proc|root|home|srv|snap)(?:/[^\s;&|"'\\]*)?|/var(?:/(?:lib|log|www|spool|cache|backups|mail|opt)[^\s;&|"'\\]*)?|/dev/?)(?:["'\s;&|\\]|$)`,
 			action:   "deny",
 			message:  "deleting critical system paths is forbidden",
 			priority: 100,

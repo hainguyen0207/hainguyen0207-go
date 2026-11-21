@@ -263,6 +263,7 @@ func reconTools() []actool.CoreTool {
 		reconStopWorkflow(),
 		reconGraphNote(),
 		reconVulnKB(),
+		reconVulnKBProfile(),
 	}
 }
 

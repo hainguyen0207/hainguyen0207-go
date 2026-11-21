@@ -514,6 +514,39 @@ export interface Finding {
   verification?: FindingVerification; // Latest finding-validation round; absent = never validated.
 }
 
+// HintStats: hint -> intent -> finding provenance for a task.
+export interface HintStats {
+  summary: Record<string, { Hints: number; Used: number; Intents: number; Findings: number; Confirmed: number }>;
+  hints: {
+    id: number;
+    source: string;
+    state: string;
+    text: string;
+    created_at: string;
+    intents: { id: number; state: string; summary: string }[];
+    findings: { id: number; severity: string; status: string; name: string; verdict?: string; intent_id: number; severity_confirmed?: string }[];
+  }[];
+}
+
+// FindingValidation is one finding-validation round (validator or escalator).
+export interface FindingValidation {
+  id: number;
+  finding_id: number;
+  stage: "validator" | "escalator";
+  conversation_id?: number | null;
+  status: "pending" | "running" | "completed" | "failed" | "stopped";
+  verdict: string;
+  tier: string;
+  severity_confirmed: string;
+  notes: string;
+  summary: string;
+  evidence: string;
+  error: string;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
 // FindingVerification is the finding validator agent's latest verdict.
 export interface FindingVerification {
   state: "queued" | "running" | "verified" | "rejected" | "escalating" | "failed" | "paused";

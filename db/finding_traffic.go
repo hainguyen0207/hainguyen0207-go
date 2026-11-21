@@ -370,7 +370,7 @@ VALUES($1,'finding',$2,9,'confirmed',$3) RETURNING id`, in.ExplorationID, string
 		return nil, err
 	}
 	for _, asset := range in.AssetIDs {
-		if _, err := tx.Exec(`INSERT INTO exploration_anchors(node_id,asset_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, out.NodeID, asset); err != nil {
+		if _, err := tx.Exec(`INSERT INTO exploration_anchors(node_id, asset_id) SELECT $1::bigint, $2::bigint WHERE EXISTS (SELECT 1 FROM assets WHERE id=$2::bigint) ON CONFLICT DO NOTHING`, out.NodeID, asset); err != nil {
 			return nil, err
 		}
 	}
