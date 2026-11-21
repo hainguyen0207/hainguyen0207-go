@@ -24,6 +24,10 @@ import (
 //  2. Filter matching never errors: a malformed config is always treated as a "hit" (see notify.Match). Better to
 //     over-push than to miss a push.
 
+// SettingNotifyFindingCreated toggles the immediate "new finding" push; "false"
+// leaves only the validation-gated report push. Unset/anything else = on.
+const SettingNotifyFindingCreated = "notify_finding_created"
+
 // ErrNotificationChannelNotFound indicates the channel does not exist.
 var ErrNotificationChannelNotFound = errors.New("notification channel not found")
 
@@ -326,8 +330,19 @@ WHERE NOT fanned_out ORDER BY id FOR UPDATE SKIP LOCKED LIMIT $1`, limit)
 		eventID   int64
 		channelID int64
 	}
+	// "New finding" pushes (finding_created) can be switched off globally with
+	// setting notify_finding_created=false: the operator then receives only the
+	// validation-gated report push (finding_report_ready). Such events are still
+	// marked fanned out below, so they never pile up in the queue.
+	skipCreated := false
+	if v, _, err := d.GetSetting(SettingNotifyFindingCreated); err == nil && strings.EqualFold(strings.TrimSpace(v), "false") {
+		skipCreated = true
+	}
 	var toInsert []pending
 	for i, snap := range parsedSnaps {
+		if skipCreated && snap.Kind == notify.EventFindingCreated {
+			continue
+		}
 		for _, ch := range channels {
 			if !notify.Match(notify.ParseFilter(ch.Filter), snap) {
 				continue

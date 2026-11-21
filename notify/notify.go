@@ -36,6 +36,9 @@ const (
 const (
 	EventFindingCreated       = "finding_created"
 	EventFindingStatusChanged = "finding_status_changed"
+	// EventFindingReportReady fires once per finding, when its detailed Markdown
+	// report is first saved (update_finding_report); carries the report text.
+	EventFindingReportReady = "finding_report_ready"
 )
 
 // InitKind is the fallback value for an empty kind in the config.

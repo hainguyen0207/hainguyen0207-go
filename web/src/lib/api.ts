@@ -21,6 +21,8 @@ import type {
   Asset,
   AssetInterceptRule,
   AssetInterceptRuleInput,
+  TaskCredential,
+  TaskCredentialInput,
   Audit,
   BatchCategoryItem,
   BatchControlItem,
@@ -251,6 +253,7 @@ export const api = {
     reconWorkflow?: string;
     planHeartbeatSeconds?: number;
     coverageEnabled?: boolean;
+    verifyFindings?: boolean;
     interceptRules?: AssetInterceptRuleInput[];
   }) =>
     post<Task>("/tasks", {
@@ -268,6 +271,7 @@ export const api = {
       recon_workflow: input.reconWorkflow,
       plan_heartbeat_seconds: input.planHeartbeatSeconds ?? 0, // 0 is normalized by the backend to 600 seconds (10 minutes).
       coverage_enabled: input.coverageEnabled ?? true, // Enabled by default; false disables asset coverage.
+      verify_findings: input.verifyFindings ?? true, // Validate medium+ findings before the Telegram push.
       intercept_rules: input.interceptRules ?? [], // Task-specific asset interception rules.
     }),
   taskCategories: () => get<{ categories: TaskCategory[] }>("/task-categories").then((r) => arr(r.categories)),
@@ -434,6 +438,15 @@ export const api = {
     del<{ deleted: boolean }>(`/tasks/${id}/intercept-rules/${ruleId}`),
   toggleTaskInterceptRule: (id: string, ruleId: number, enabled: boolean) =>
     post<{ ok: boolean; enabled: boolean }>(`/tasks/${id}/intercept-rules/${ruleId}/toggle`, { enabled }),
+
+  // Per-task finding-validation gate toggle.
+  setTaskVerifyFindings: (id: string, enabled: boolean) =>
+    post<{ ok: boolean; verify_findings: boolean }>(`/tasks/${id}/verify-findings`, { enabled }),
+
+  // Per-task test credentials (ported from bcpen #3).
+  taskCredentials: (id: string) => get<TaskCredential[]>(`/tasks/${id}/credentials`).then((r) => arr(r)),
+  addTaskCredential: (id: string, input: TaskCredentialInput) => post<TaskCredential>(`/tasks/${id}/credentials`, input),
+  deleteTaskCredential: (id: string, cid: number) => del(`/tasks/${id}/credentials/${cid}`),
 
   // Task test scopes, including inherited source-task scopes.
   taskScope: (id: string) => get<{ scope: TaskScopeRow[] }>(`/tasks/${id}/scope`),

@@ -659,6 +659,9 @@ func (t *ToolSet) WorkerTools() []actool.CoreTool {
 		// add_company_scope is not given to the worker: defining a company's asset scope
 		// is the planner/main/Auto's job; the worker only carries out exploration.
 		t.insertAssets(), t.listAssets(),
+		// Per-task test accounts (ported from bcpen #3): reuse declared accounts for
+		// authenticated testing (IDOR/privesc) and record any account it registers.
+		t.saveTaskCredential(), t.listTaskCredentials(),
 		// Cross-work review: a worker may also reuse other works' observations to avoid duplicated effort.
 		// search_all_worker_traces: no need to know the intent_id first; find matching steps globally by keyword.
 		// get_worker_trace: after pinning one work, list its steps / search in place / fetch full content.

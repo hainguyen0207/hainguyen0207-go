@@ -158,7 +158,12 @@ type anthropicReq struct {
 	StopSequences []string               `json:"stop_sequences,omitempty"`
 	Thinking      *anthropicThinking     `json:"thinking,omitempty"`
 	OutputConfig  *anthropicOutputConfig `json:"output_config,omitempty"`
-	Stream        bool                   `json:"stream"`
+	// CacheControl is top-level automatic prompt caching: the API places a
+	// breakpoint on the last cacheable block and moves it forward as the
+	// conversation grows, so each agent turn reads the whole prior history from
+	// cache. Sent only to the official Anthropic API (see autoCacheSupported).
+	CacheControl map[string]any `json:"cache_control,omitempty"`
+	Stream       bool           `json:"stream"`
 }
 
 // anthropicThinking is the "thinking":{"type":"enabled"|"disabled"} switch.
@@ -229,6 +234,9 @@ func (p *anthropicProvider) buildBody(req CompletionRequest, stream bool) ([]byt
 	}
 	if p.sub { // subscription path: prepend the Claude-Code billing/identity block
 		body.System = append([]anthropicSystemBlock{{Type: "text", Text: claudeSubIdentity}}, body.System...)
+	}
+	if p.autoCacheSupported() {
+		body.CacheControl = map[string]any{"type": "ephemeral"}
 	}
 	return json.Marshal(body)
 }
@@ -533,4 +541,23 @@ func mergeAdjacentSameRole(msgs []Message) []Message {
 		out = append(out, m)
 	}
 	return out
+}
+
+// autoCacheSupported reports whether the endpoint is the official Anthropic API
+// (API key or subscription OAuth), which accepts top-level automatic caching.
+// Anthropic-compatible third-party endpoints may reject the unknown field, so
+// they keep only the explicit system-prompt breakpoint.
+func (p *anthropicProvider) autoCacheSupported() bool {
+	if p.sub {
+		return true
+	}
+	base := strings.TrimSpace(p.cfg.BaseURL)
+	if base == "" {
+		return true
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Hostname(), "api.anthropic.com")
 }

@@ -38,6 +38,7 @@ export interface Task {
   source_task_ids?: string[]; // directly related tasks inherited as read-only context
   archive_blocked_by_task_id?: string; // live direct dependent that must be archived first
   company_ids?: number[]; // associated company scopes; current company assets join the task at creation
+  verify_findings?: boolean; // Finding-validation gate before the Telegram report push (default on).
   coverage_enabled?: boolean; // Coverage feature switch set at creation, on by default; false disables calculation/display.
 }
 
@@ -510,6 +511,19 @@ export interface Finding {
   inherited?: boolean;
   assets?: FindingAsset[];
   ts: string;
+  verification?: FindingVerification; // Latest finding-validation round; absent = never validated.
+}
+
+// FindingVerification is the finding validator agent's latest verdict.
+export interface FindingVerification {
+  state: "queued" | "running" | "verified" | "rejected" | "escalating" | "failed" | "paused";
+  stage: "validator" | "escalator";
+  verdict?: string;
+  tier?: string;
+  severity_confirmed?: string;
+  summary?: string;
+  error?: string;
+  at: string;
 }
 
 // FindingsPage is the server-paginated findings response.
@@ -1671,3 +1685,19 @@ export interface JudgeUsage {
   cache_write_tokens: number;
   daily: JudgeDayUsage[];
 }
+
+// ---- Per-task test credentials ----
+export type TaskCredentialInput = {
+  domain: string;
+  username: string;
+  password: string;
+  note?: string;
+};
+export type TaskCredential = TaskCredentialInput & {
+  id: number;
+  task_id: number;
+  source: "user" | "agent";
+  note: string;
+  created_at: string;
+  updated_at: string;
+};

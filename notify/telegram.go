@@ -51,6 +51,9 @@ func (c telegramChannel) Send(ctx context.Context, cfg map[string]any, m Message
 	if err := c.Validate(cfg); err != nil {
 		return 0, Permanent(err)
 	}
+	if !m.Batch && len(m.Items) == 1 && m.Items[0].Report != "" {
+		return c.sendReport(ctx, cfg, m) // full report.md (see telegram_report.go)
+	}
 	endpoint, err := telegramEndpoint(cfg)
 	if err != nil {
 		return 0, Permanent(err)
@@ -129,6 +132,12 @@ func telegramHTML(m Message) (string, int) {
 		return b.String(), 0
 	}
 	it := m.Items[0]
+	if it.TaskName != "" {
+		b.WriteString("<b>Task</b>: " + telegramEscape(it.TaskName) + "\n")
+	}
+	if v := strings.TrimSpace(it.Verification); v != "" {
+		b.WriteString(telegramEscape(TruncateRunes(v, 120)) + "\n")
+	}
 	if it.IsStatusChange() {
 		b.WriteString(fmt.Sprintf("\n<b>Status change</b>: %s → %s",
 			telegramEscape(StatusLabel(it.FromStatus)), telegramEscape(StatusLabel(it.ToStatus))))

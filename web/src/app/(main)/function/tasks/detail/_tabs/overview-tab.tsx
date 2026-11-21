@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 
 import { StatusBadge } from "@/components/status-badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TaskRoleLLM, VALIDATOR_ROLE_DESC, VALIDATOR_ROLES } from "@/components/task-role-llm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,6 +37,7 @@ import type {
   AssetInterceptKind,
   AssetInterceptRule,
   Finding,
+  LLMProfile,
   ModelTokenStat,
   Stats,
   Task,
@@ -114,6 +117,14 @@ export function OverviewTab({ taskId }: { taskId: string }) {
   const { t: swt, locale: swLocale } = useI18n();
 
   const [task, setTask] = React.useState<Task | null>(null);
+  const [verifyBusy, setVerifyBusy] = React.useState(false);
+  const [llmProfiles, setLlmProfiles] = React.useState<LLMProfile[]>([]);
+  React.useEffect(() => {
+    api
+      .llmProfiles()
+      .then(setLlmProfiles)
+      .catch(() => setLlmProfiles([]));
+  }, []);
   const [stats, setStats] = React.useState<Stats | null>(null);
   const [intents, setIntents] = React.useState<TaskNode[]>([]);
   const [findings, setFindings] = React.useState<Finding[]>([]);
@@ -456,6 +467,47 @@ export function OverviewTab({ taskId }: { taskId: string }) {
             <div className="text-xs font-medium text-muted-foreground">{swt("interface.m0523")}</div>
             <p className="text-sm whitespace-pre-wrap break-words">{task?.goal?.trim() || "—"}</p>
           </div>
+        </CardContent>
+      </Card>
+      {/* Finding-validation gate: validate medium+ findings before the Telegram push. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Xác minh finding (retest)</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-1.5">
+          <label htmlFor="ov-verify-findings" className="flex items-center gap-2 text-sm">
+            <Checkbox
+              id="ov-verify-findings"
+              disabled={!task || verifyBusy}
+              checked={task?.verify_findings !== false}
+              onCheckedChange={(v) => {
+                if (!task) return;
+                const next = !!v;
+                setVerifyBusy(true);
+                api
+                  .setTaskVerifyFindings(taskId, next)
+                  .then(() => setTask((prev) => (prev ? { ...prev, verify_findings: next } : prev)))
+                  .catch((e) => alert((e as Error).message))
+                  .finally(() => setVerifyBusy(false));
+              }}
+            />
+            Verify finding trước khi gửi Telegram
+          </label>
+          <p className="text-muted-foreground text-xs">
+            Bật: agent validator tái hiện các lỗi từ medium trở lên, chỉ lỗi được xác nhận mới gửi Telegram. Tắt: gửi report.md ngay khi
+            viết xong (chưa xác minh). Áp dụng cho các report được viết từ lúc đổi.
+          </p>
+          {task?.verify_findings !== false && (
+            <div className="mt-2">
+              <TaskRoleLLM
+                taskId={taskId}
+                profiles={llmProfiles}
+                roles={VALIDATOR_ROLES}
+                title="Model cho agent xác minh"
+                description={VALIDATOR_ROLE_DESC}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
       {/* Manage task objectives. Additions/edits notify the planner and reactivate the task; deletion only notifies. Objectives are final verifiable outcomes, not attack steps or reconnaissance actions. */}

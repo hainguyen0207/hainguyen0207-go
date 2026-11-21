@@ -230,6 +230,33 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		if err := s.seedFindingRetester(); err != nil {
 			log.Printf("[retester] seed: %v", err)
 		}
+		if err := s.seedFindingValidators(); err != nil {
+			log.Printf("[validator] seed: %v", err)
+		}
+		s.seedValidatorSkills()
+		s.seedValidatorTrafficBinding()
+		go func() { // re-run validations a restart interrupted, once the chat agent is up
+			select {
+			case <-s.ctx.Done():
+			case <-time.After(90 * time.Second):
+				s.resumeInterruptedValidations()
+			}
+			s.sweepMissingReports() // first call arms the forward-only watermark
+			sweepTick := 0
+			t := time.NewTicker(60 * time.Second) // safety net: dispatch queued rounds
+			defer t.Stop()
+			for {
+				select {
+				case <-s.ctx.Done():
+					return
+				case <-t.C:
+					s.pumpValidations()
+					if sweepTick++; sweepTick%10 == 0 { // every 10 minutes
+						s.sweepMissingReports()
+					}
+				}
+			}
+		}()
 		go s.evidenceStore().RunGC(s.ctx)
 		s.seedPythonInterpreter()     // custom script tool: detect the python interpreter at startup and store it (only when empty)
 		go newScheduler(s).Run(s.ctx) // P3 trigger scheduling (timer/finding/goal events), custom agents only
@@ -530,6 +557,11 @@ func (s *Server) loadProfileConfig(id int64) (agent.Config, bool) {
 // can't happen (FK ON DELETE SET NULL); an otherwise-invalid one is dropped downstream
 // by loadProfileConfig, letting the caller fall back.
 func (s *Server) effectiveProfileForAgent(agentKey string, pinID *int64) *int64 {
+	// Finding-gate conversations are pinned to the task's "validator" role model
+	// when the task chose one; that per-task choice beats the agent's own binding.
+	if pinID != nil && (agentKey == db.FindingValidatorAgentKey || agentKey == db.FindingEscalatorAgentKey) {
+		return pinID
+	}
 	if s.m.pg != nil && agentKey != "" {
 		if a, _ := s.m.pg.GetAgentByKey(agentKey); a != nil && a.LLMProfileID != nil {
 			return a.LLMProfileID
@@ -700,6 +732,10 @@ func (s *Server) Handler() http.Handler {
 	// task-level asset intercept/allow rules
 	mux.HandleFunc("GET /api/tasks/{id}/intercept-rules", s.taskInterceptListRules)
 	mux.HandleFunc("POST /api/tasks/{id}/intercept-rules", s.taskInterceptCreateRule)
+	mux.HandleFunc("POST /api/tasks/{id}/verify-findings", s.setTaskVerifyFindings)
+	mux.HandleFunc("GET /api/tasks/{id}/credentials", s.listTaskCredentials)
+	mux.HandleFunc("POST /api/tasks/{id}/credentials", s.addTaskCredential)
+	mux.HandleFunc("DELETE /api/tasks/{id}/credentials/{cid}", s.deleteTaskCredential)
 	mux.HandleFunc("PUT /api/tasks/{id}/intercept-rules/{rid}", s.taskInterceptUpdateRule)
 	mux.HandleFunc("DELETE /api/tasks/{id}/intercept-rules/{rid}", s.taskInterceptDeleteRule)
 	mux.HandleFunc("POST /api/tasks/{id}/intercept-rules/{rid}/toggle", s.taskInterceptToggleRule)
@@ -787,6 +823,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/exploration/findings/{id}/retests", s.listFindingRetests)
 	mux.HandleFunc("GET /api/exploration/findings/retests/active", s.listActiveFindingRetests)
 	mux.HandleFunc("POST /api/exploration/findings/{id}/retests", s.startFindingRetest)
+	mux.HandleFunc("GET /api/exploration/findings/{id}/validations", s.listFindingValidations)
+	mux.HandleFunc("GET /api/exploration/findings/validations/active", s.listActiveFindingValidations)
+	mux.HandleFunc("POST /api/exploration/findings/validations/backfill", s.backfillFindingValidations)
+	mux.HandleFunc("POST /api/exploration/findings/{id}/validations", s.startFindingValidation)
 	mux.HandleFunc("PATCH /api/exploration/findings/{id}", s.patchFinding)
 	mux.HandleFunc("DELETE /api/exploration/findings/{id}", s.deleteFinding)
 	mux.HandleFunc("GET /api/exploration/intents", s.intents)
@@ -1486,6 +1526,7 @@ type createTaskReq struct {
 	TimeoutSeconds       int      `json:"timeout_seconds"`             // task-level timeout (seconds); 0/omitted = no limit
 	PlanHeartbeatSeconds int      `json:"plan_heartbeat_seconds"`      // planner heartbeat trigger interval (seconds); 0/omitted = default 600 (10min); lower bound = default = 600, anything lower is raised to 600
 	SeedFirstIntent      *bool    `json:"seed_first_intent,omitempty"` // on creation, directly issue one seed intent (content = description + goal) so the worker starts without waiting for the first planner round; omitted/null = off by default, following the standard plan-then-execute flow. Only an explicit true enables it (for CTFs often solved in one work, the planner round before starting can be skipped).
+	VerifyFindings       *bool    `json:"verify_findings,omitempty"`   // finding-validation gate; nil = on
 	CoverageEnabled      *bool    `json:"coverage_enabled,omitempty"`  // asset coverage feature; omitted/null = on by default (true). false = disable coverage computation/display/auto-accumulated scope + hide add_task_scope/list_untested_assets. Company association is unaffected.
 	// InterceptRules task-level asset intercept/allow rules (entered on creation, stored in task_intercept_rules, not in the global table).
 	InterceptRules []taskInterceptRuleReq `json:"intercept_rules,omitempty"`
@@ -1548,8 +1589,8 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		Name: strings.TrimSpace(req.Name), CategoryID: req.CategoryID,
 		SourceTaskIDs: sourceIDs, CompanyIDs: req.CompanyIDs, LLMProfileIDs: req.LLMProfileIDs,
 		TimeoutSeconds: req.TimeoutSeconds, PlanHeartbeatSeconds: req.PlanHeartbeatSeconds,
-		CoverageEnabled: req.CoverageEnabled,
-		InterceptRules:  interceptRules,
+		CoverageEnabled: req.CoverageEnabled, VerifyFindings: req.VerifyFindings,
+		InterceptRules: interceptRules,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrTaskCategoryInvalid) || errors.Is(err, db.ErrTaskCategoryNotFound) {
@@ -2000,6 +2041,7 @@ func (s *Server) findings(w http.ResponseWriter, r *http.Request) {
 			for _, f := range fs {
 				out = append(out, findingFromDB(f, assets))
 			}
+			s.attachVerification(out)
 			writeJSON(w, 200, out)
 			return
 		}
@@ -2015,6 +2057,7 @@ func (s *Server) findings(w http.ResponseWriter, r *http.Request) {
 		for _, f := range fs {
 			out = append(out, findingFromDB(f, assets))
 		}
+		s.attachVerification(out)
 		writeJSON(w, 200, map[string]any{"items": out, "total": total, "page": page, "page_size": limit})
 		return
 	}
@@ -2073,6 +2116,7 @@ func (s *Server) findings(w http.ResponseWriter, r *http.Request) {
 			s.resolveAssetIDs(sourceAssetIDs),
 		)...)
 	}
+	s.attachVerification(out)
 	writeJSON(w, 200, out)
 }
 
@@ -2163,6 +2207,9 @@ func (s *Server) getFinding(w http.ResponseWriter, r *http.Request) {
 		dto.SourceTaskID = sourceTaskID
 		dto.Inherited = inherited
 	}
+	one := []FindingDTO{dto}
+	s.attachVerification(one)
+	dto = one[0]
 	writeJSON(w, 200, dto)
 }
 

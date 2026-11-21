@@ -20,6 +20,7 @@ import {
 import { CopyButton } from "@/components/copy-button";
 import { Markdown } from "@/components/markdown";
 import { StatusBadge } from "@/components/status-badge";
+import { VerificationBadge } from "@/components/verification-badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -259,6 +260,7 @@ export function FindingsTable({
                   ) : (
                     <StatusBadge domain="finding" value={f.status} dot />
                   )}
+                  <VerificationBadge v={f.verification} className="mt-1" />
                 </TableCell>
                 <TableCell>
                   {f.task_id ? (

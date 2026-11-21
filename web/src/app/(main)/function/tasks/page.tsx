@@ -51,7 +51,7 @@ import { AssetInterceptRulesEditor } from "@/components/asset-intercept-rules-ed
 import { StatusBadge } from "@/components/status-badge";
 import { TablePagination } from "@/components/table-pagination";
 import { TaskLLMProfileChain } from "@/components/task-llm-profile-chain";
-import { TaskRoleLLM, type RoleOverrides } from "@/components/task-role-llm";
+import { TaskRoleLLM, VALIDATOR_ROLE_DESC, VALIDATOR_ROLES, type RoleOverrides } from "@/components/task-role-llm";
 import { TaskTemplateControls } from "@/components/task-template-controls";
 import {
   AlertDialog,
@@ -3145,6 +3145,7 @@ function CreateTaskSheet({
   const [reconFirst] = React.useState(false); // Recon-first disabled: the agent drives recon itself (recon-engine loop); no operator pre-run.
   const [reconTarget] = React.useState(""); // unused (recon-first removed); kept so the submit payload stays stable.
   const [reconWorkflow] = React.useState("all"); // unused (recon-first removed); kept so the submit payload stays stable.
+  const [verifyFindings, setVerifyFindings] = React.useState(true); // Validate medium+ findings before the Telegram push.
   const [coverageEnabled, setCoverageEnabled] = React.useState(true); // Coverage defaults on. Off disables calculation/display, scope accumulation, and scope tools; company links remain.
   const [interceptRules, setInterceptRules] = React.useState<AssetInterceptRuleInput[]>([]); // Task-specific asset interception rules, never written to the global table.
   // Before task creation, stage uploads in drafts/<draftId>/uploads/ and append returned absolute paths to description.
@@ -3231,6 +3232,7 @@ function CreateTaskSheet({
         reconWorkflow,
         planHeartbeatSeconds: heartbeatSec,
         coverageEnabled,
+        verifyFindings,
         interceptRules: [...interceptRules, ...outRules]
           .map((r) => ({ ...r, pattern: r.pattern.trim() }))
           .filter((r) => r.pattern !== ""),
@@ -3261,6 +3263,7 @@ function CreateTaskSheet({
       setHeartbeatMin("10");
       setSeedFirstIntent(false);
       setCoverageEnabled(true);
+      setVerifyFindings(true);
       setInterceptRules([]);
       setUploadCount(0);
       draftIdRef.current = "";
@@ -3422,6 +3425,28 @@ function CreateTaskSheet({
               />
               <FieldDescription>{swt("interface.m1045")}</FieldDescription>
               <TaskRoleLLM profiles={profiles} value={roleOverrides} onChange={setRoleOverrides} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="verify-findings">Xác minh finding (retest)</FieldLabel>
+              <label htmlFor="verify-findings" className="flex items-center gap-2 text-sm">
+                <Checkbox id="verify-findings" checked={verifyFindings} onCheckedChange={(v) => setVerifyFindings(!!v)} />
+                Verify finding trước khi gửi Telegram
+              </label>
+              <FieldDescription>
+                Bật: agent validator tự tái hiện các lỗi từ <b>medium trở lên</b>; chỉ lỗi được xác nhận mới gửi report.md về Telegram
+                (lỗi bị bác thì không gửi). Tắt: report.md được gửi về Telegram ngay khi viết xong, đánh dấu “chưa xác minh”.
+                Có thể đổi lại trong tab Overview của task.
+              </FieldDescription>
+              {verifyFindings && (
+                <TaskRoleLLM
+                  profiles={profiles}
+                  value={roleOverrides}
+                  onChange={setRoleOverrides}
+                  roles={VALIDATOR_ROLES}
+                  title="Model cho agent xác minh"
+                  description={VALIDATOR_ROLE_DESC}
+                />
+              )}
             </Field>
 
             {/* Advanced timeout/heartbeat/first-intent settings start collapsed to keep the common flow compact. */}

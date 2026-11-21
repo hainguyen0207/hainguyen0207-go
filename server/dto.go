@@ -62,6 +62,7 @@ type TaskDTO struct {
 	ArchiveBlockedBy   string             `json:"archive_blocked_by_task_id,omitempty"`
 	CompanyIDs         []int64            `json:"company_ids"`
 	CoverageEnabled    bool               `json:"coverage_enabled"` // asset coverage feature toggle (set at creation)
+	VerifyFindings     bool               `json:"verify_findings"`  // finding-validation gate (toggleable per task)
 }
 
 // FindingSeverityDTO is the per-severity vulnerability count shown in the task list (critical/high/medium/low).
@@ -135,6 +136,7 @@ func taskDTO(t *Task, status string) TaskDTO {
 		SourceTaskIDs:      sourceIDs,
 		CompanyIDs:         lifecycle.CompanyIDs,
 		CoverageEnabled:    t.CoverageEnabled,
+		VerifyFindings:     t.VerifyFindings,
 	}
 }
 
@@ -328,6 +330,8 @@ type FindingDTO struct {
 	Inherited       bool              `json:"inherited,omitempty"`
 	Assets          []FindingAssetDTO `json:"assets,omitempty"`
 	TS              string            `json:"ts"`
+	// Verification is the latest finding-validation round (nil = never validated).
+	Verification *FindingVerificationDTO `json:"verification,omitempty"`
 }
 
 // FindingAssetDTO is one asset a finding is anchored to, pre-labelled for display.

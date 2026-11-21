@@ -43,6 +43,7 @@ func jsonResult(v any) (actool.Result, error) {
 func (s *Server) hostTools() ([]actool.CoreTool, map[string][]string) {
 	tools := append(s.m.HostTools(), s.orchestrationTools()...)
 	tools = append(tools, s.findingRetestTools()...)
+	tools = append(tools, s.findingValidationTools()...)
 	tools = append(tools, s.platformTools()...)      // platform operation tools (create/modify skill/tool/MCP, for Auto)
 	tools = append(tools, s.endpointReconTools()...) // endpoint reconstructor: replay + rich endpoint asset writes (bound to endpoint_recon)
 	custom, err := s.customTools()
@@ -454,6 +455,7 @@ func (s *Server) toolUpdateFindingReport() actool.CoreTool {
 			if n == 0 {
 				return actool.Errorf(fmt.Sprintf("no vulnerability record found for finding_id=%d (register it with report_finding first)", nodeID)), nil
 			}
+			s.notifyFindingReportReady(nodeID, a.Report) // push the full report (first save only)
 			return actool.Text(fmt.Sprintf("finding %d report updated (%d chars)", nodeID, len(a.Report))), nil
 		})
 }
@@ -516,6 +518,7 @@ func (s *Server) seedOrchestrationTools() {
 	s.upgradeReporterTriggerMessage() // backfill migration for old DBs: make reporter return evidence_version (one-time)
 	s.seedFindingTrafficTools()       // add optional evidence params and read-only evidence tools, preserving user config
 	s.seedFindingWorkflowTools()
+	s.seedTaskCredentialBindings() // bind save/list_task_credential onto worker + pentest (one-time)
 	// Note: pentest's default tool bindings need no migration — BuiltinToolSeeds already seeds
 	// list_assets/insert_assets/report_finding/list_findings/list_companies together with pentest
 	// on a fresh init (the project has no old DBs, so no migration is done).

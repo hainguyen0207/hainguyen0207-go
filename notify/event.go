@@ -27,6 +27,15 @@ type Snapshot struct {
 	// Non-empty only when kind=finding_status_changed.
 	FromStatus string `json:"from_status,omitempty"`
 	ToStatus   string `json:"to_status,omitempty"`
+	// TaskName is the owning task's name at event time (may be empty in events
+	// written by older versions; the renderer then looks it up).
+	TaskName string `json:"task_name,omitempty"`
+	// Report is the finding's full Markdown report; set only on
+	// kind=finding_report_ready.
+	Report string `json:"report,omitempty"`
+	// Verification is the validation-gate status line shown with the report
+	// (e.g. "✅ Verified by validator" / "⚠️ Unverified: ...").
+	Verification string `json:"verification,omitempty"`
 }
 
 // Item is a single vulnerability to be pushed, for channel rendering.
@@ -47,6 +56,13 @@ type Item struct {
 	// "Pending → Fixed".
 	FromStatus string
 	ToStatus   string
+	// TaskName is the owning task's display name ("" = unknown).
+	TaskName string
+	// Report is the full Markdown report (report_ready events only); channels
+	// that support it deliver the whole report instead of the one-line summary.
+	Report string
+	// Verification is the validation-gate status line (report_ready only).
+	Verification string
 }
 
 // IsStatusChange reports whether the item is a status-change event.

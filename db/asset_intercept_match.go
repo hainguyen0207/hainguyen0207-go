@@ -47,7 +47,8 @@ func (r AssetInterceptRule) Reason() string {
 
 // matchOne decides whether a single enabled rule matches the given domain/IP/URL
 // candidate strings, and returns the specific matched value.
-func matchOne(r AssetInterceptRule, domains, ips, urls []string) (string, bool) {
+// allow selects allow-rule semantics (right-anchored domain match).
+func matchOne(r AssetInterceptRule, domains, ips, urls []string, allow bool) (string, bool) {
 	p := strings.TrimSpace(r.Pattern)
 	if p == "" {
 		return "", false
@@ -72,9 +73,25 @@ func matchOne(r AssetInterceptRule, domains, ips, urls []string) (string, bool) 
 			}
 		}
 	case "fuzzy_domain":
-		lp := strings.ToLower(p)
+		// Whole-label matching (ported from ScopeWeaver/bcpen #50). The old
+		// substring match let an allow rule "gp.monash.edu" admit
+		// "gp.monash.edu.attacker.com" or "xgp.monash.edu" -> out-of-scope assets.
+		//   block: the pattern's labels anywhere (".gov" hits x.gov / x.gov.uk, not a.government.com)
+		//   allow: the domain itself or its subdomains only (right-anchored)
+		lp := strings.Trim(strings.ToLower(p), ".")
+		if lp == "" {
+			return "", false
+		}
 		for _, d := range domains {
-			if d != "" && strings.Contains(strings.ToLower(d), lp) {
+			domain := strings.Trim(strings.ToLower(strings.TrimSpace(d)), ".")
+			if domain == "" {
+				continue
+			}
+			matched := strings.Contains("."+domain+".", "."+lp+".")
+			if allow {
+				matched = domain == lp || strings.HasSuffix(domain, "."+lp)
+			}
+			if matched {
 				return d, true
 			}
 		}
@@ -109,11 +126,22 @@ func matchOne(r AssetInterceptRule, domains, ips, urls []string) (string, bool) 
 // domain/IP/URL candidate strings, along with the specific matched value.
 // Used by insert_assets to match raw input (an assetInputItem not yet persisted).
 func MatchAssetInterceptRules(rules []AssetInterceptRule, domains, ips, urls []string) (AssetInterceptRule, string, bool) {
+	return matchAssetInterceptRules(rules, domains, domains, ips, urls, false)
+}
+
+// matchAssetInterceptRules: exactDomains are the asset's real hosts (no root
+// domain) and are used for exact_domain ALLOW rules, so an asset is not admitted
+// by an exact allow merely because its root domain equals the pattern.
+func matchAssetInterceptRules(rules []AssetInterceptRule, domains, exactDomains, ips, urls []string, allow bool) (AssetInterceptRule, string, bool) {
 	for _, r := range rules {
 		if !r.Enabled {
 			continue
 		}
-		if v, ok := matchOne(r, domains, ips, urls); ok {
+		ruleDomains := domains
+		if allow && r.Kind == "exact_domain" {
+			ruleDomains = exactDomains
+		}
+		if v, ok := matchOne(r, ruleDomains, ips, urls, allow); ok {
 			return r, v, true
 		}
 	}
@@ -130,7 +158,6 @@ func (a *Asset) interceptCandidates() (domains, ips, urls []string) {
 		}
 	}
 	add(&domains, a.Domain)
-	add(&domains, a.RootDomain)
 	for _, d := range a.BoundDomains {
 		add(&domains, d)
 	}
@@ -193,11 +220,15 @@ type AssetGateDecision struct {
 // (i.e. the whitelist is not enabled, everything is allowed), so that "no allow
 // rules configured" does not block all assets.
 func EvaluateAssetGate(blockRules, allowRules []AssetInterceptRule, domains, ips, urls []string) AssetGateDecision {
-	if rule, _, ok := MatchAssetInterceptRules(blockRules, domains, ips, urls); ok {
+	return evaluateAssetGateForCandidates(blockRules, allowRules, domains, domains, ips, urls)
+}
+
+func evaluateAssetGateForCandidates(blockRules, allowRules []AssetInterceptRule, domains, exactDomains, ips, urls []string) AssetGateDecision {
+	if rule, _, ok := matchAssetInterceptRules(blockRules, domains, exactDomains, ips, urls, false); ok {
 		return AssetGateDecision{Allowed: false, Reason: rule.Reason()}
 	}
 	if hasEnabledRule(allowRules) {
-		if _, _, ok := MatchAssetInterceptRules(allowRules, domains, ips, urls); !ok {
+		if _, _, ok := matchAssetInterceptRules(allowRules, domains, exactDomains, ips, urls, true); !ok {
 			return AssetGateDecision{Allowed: false, Reason: "not within the task's allowed (whitelist) scope; testing not permitted"}
 		}
 	}
@@ -256,7 +287,13 @@ func (s *AssetStore) CheckAssetsIntercept(taskID int64, ids []int64) ([]AssetInt
 	var hits []AssetInterceptHit
 	for _, a := range assets {
 		domains, ips, urls := a.interceptCandidates()
-		if d := EvaluateAssetGate(blockRules, allowRules, domains, ips, urls); !d.Allowed {
+		// Root domain still feeds block/fuzzy matching, but exact_domain allow
+		// rules require one of the asset's real hosts.
+		allDomains := domains
+		if root := strings.TrimSpace(a.RootDomain); root != "" {
+			allDomains = append(append([]string{}, domains...), root)
+		}
+		if d := evaluateAssetGateForCandidates(blockRules, allowRules, allDomains, domains, ips, urls); !d.Allowed {
 			hits = append(hits, AssetInterceptHit{Asset: a, Reason: d.Reason})
 		}
 	}

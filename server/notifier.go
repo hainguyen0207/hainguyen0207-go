@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -492,14 +493,21 @@ func (n *Notifier) itemFor(ctx context.Context, snap notify.Snapshot, baseURL st
 		log.Printf("[notify] resolve asset names failed finding=%d: %v", snap.FindingID, err)
 	}
 	item := notify.Item{
-		FindingID:  snap.FindingID,
-		Name:       snap.Name,
-		VulnClass:  snap.VulnClass,
-		Severity:   snap.Severity,
-		Summary:    snap.Summary,
-		Assets:     assets,
-		FromStatus: snap.FromStatus,
-		ToStatus:   snap.ToStatus,
+		FindingID:    snap.FindingID,
+		Name:         snap.Name,
+		VulnClass:    snap.VulnClass,
+		Severity:     snap.Severity,
+		Summary:      snap.Summary,
+		Assets:       assets,
+		FromStatus:   snap.FromStatus,
+		ToStatus:     snap.ToStatus,
+		TaskName:     snap.TaskName,
+		Report:       snap.Report,
+		Verification: snap.Verification,
+	}
+	if item.TaskName == "" && snap.TaskID > 0 {
+		// Older snapshots carry no task name: resolve it (best-effort).
+		_ = n.pg.QueryRowContext(ctx, `SELECT COALESCE(name,'') FROM tasks WHERE id=$1`, snap.TaskID).Scan(&item.TaskName)
 	}
 	if baseURL != "" {
 		// For the detail-page route see
@@ -625,4 +633,95 @@ func minF(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+// notifyFindingReportReady runs when a finding's Markdown report is saved
+// (update_finding_report). Delivery is gated on the finding validator: the report
+// is handed to the validator (startAutoValidation) and pushed only after a
+// verdict (see afterValidation). Only when the validator cannot run is the report
+// delivered right away, marked unverified, so nothing is lost.
+func (s *Server) notifyFindingReportReady(nodeID int64, report string) {
+	if s.m == nil || s.m.pg == nil || strings.TrimSpace(report) == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+	defer cancel()
+	var (
+		id       int64
+		severity string
+		verify   bool
+	)
+	if err := s.m.pg.QueryRowContext(ctx, `SELECT f.id, COALESCE(f.severity,''), COALESCE(t.verify_findings,false)
+		FROM findings f LEFT JOIN tasks t ON t.id=f.task_id WHERE f.node_id=$1`, nodeID).Scan(&id, &severity, &verify); err != nil {
+		log.Printf("[notify] report-ready: finding node=%d lookup failed: %v", nodeID, err)
+		return
+	}
+	var pushed bool
+	_ = s.m.pg.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notification_events WHERE kind=$1 AND finding_id=$2)`,
+		notify.EventFindingReportReady, id).Scan(&pushed)
+	if pushed {
+		return // already delivered this finding's report
+	}
+	// Per-task gate (tasks.verify_findings): only medium+ findings of a task with
+	// verification on go through the validator; everything else is pushed now,
+	// visibly marked as not verified.
+	switch {
+	case !verify:
+		s.queueReportReady(id, "", "⚪ Not verified (verification off for this task)")
+	case notify.SeverityRank(strings.ToLower(severity)) < notify.SeverityRank("medium"):
+		s.queueReportReady(id, "", "⚪ Not verified (below medium)")
+	case s.startAutoValidation(id):
+		// the validation gate delivers it after the verdict
+	default:
+		s.queueReportReady(id, "", "⚠️ Unverified: finding validator unavailable")
+	}
+}
+
+// queueReportReady queues the one finding_report_ready push for a finding, with
+// its CURRENT report text. severity overrides the filed severity (the validator's
+// demonstrated one); verification is the status line shown with the report.
+// Deduplicated: a finding's report is pushed at most once.
+func (s *Server) queueReportReady(findingID int64, severity, verification string) {
+	if s.m == nil || s.m.pg == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var (
+		taskID                                     int64
+		vulnclass, name, filedSev, summary, report string
+		taskName                                   string
+		assetsRaw                                  []byte
+	)
+	err := s.m.pg.QueryRowContext(ctx, `SELECT COALESCE(f.task_id,0), COALESCE(f.vulnclass,''), COALESCE(f.name,''),
+		COALESCE(f.severity,''), COALESCE(f.summary,''), COALESCE(f.report,''), COALESCE(f.asset_ids,'[]'::jsonb), COALESCE(t.name,'')
+		FROM findings f LEFT JOIN tasks t ON t.id=f.task_id WHERE f.id=$1`, findingID).
+		Scan(&taskID, &vulnclass, &name, &filedSev, &summary, &report, &assetsRaw, &taskName)
+	if err != nil {
+		log.Printf("[notify] report-ready: finding %d lookup failed: %v", findingID, err)
+		return
+	}
+	// An empty report is allowed (the sweeper's fallback when the reporter never
+	// wrote one): channels then send the summary format instead of report.md.
+	var exists bool
+	_ = s.m.pg.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notification_events WHERE kind=$1 AND finding_id=$2)`,
+		notify.EventFindingReportReady, findingID).Scan(&exists)
+	if exists {
+		return
+	}
+	sev := strings.ToLower(strings.TrimSpace(severity))
+	if sev == "" {
+		sev = filedSev
+	}
+	var assets []int64
+	_ = json.Unmarshal(assetsRaw, &assets)
+	if _, err := s.m.pg.AddNotificationEvent(ctx, notify.EventFindingReportReady, findingID, notify.Snapshot{
+		Kind: notify.EventFindingReportReady, FindingID: findingID, TaskID: taskID, TaskName: taskName,
+		VulnClass: vulnclass, Name: name, Severity: sev, Summary: summary, AssetIDs: assets, Report: report,
+		Verification: verification,
+	}); err != nil {
+		log.Printf("[notify] report-ready: queue event finding=%d failed: %v", findingID, err)
+		return
+	}
+	log.Printf("[notify] report-ready queued for finding %d (severity=%s, %s)", findingID, sev, verification)
 }

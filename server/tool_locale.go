@@ -19,6 +19,7 @@ func (s *Server) knownToolLanguages() map[string]map[locale.Lang]actool.CoreTool
 		tools = append(tools, s.orchestrationTools(lang)...)
 		tools = append(tools, s.platformTools(lang)...)
 		tools = append(tools, s.findingRetestTools(lang)...)
+		tools = append(tools, s.findingValidationTools()...)
 		for _, tool := range tools {
 			pair := pairs[tool.Name()]
 			if pair == nil {

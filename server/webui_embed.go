@@ -31,6 +31,15 @@ func (s *Server) webuiHandler() http.Handler {
 		if p == "" {
 			p = "index.html"
 		}
+		// Cache policy: content-hashed build assets never change under the same
+		// name -> cache forever; everything else (HTML pages, RSC .txt payloads)
+		// must be revalidated, otherwise a browser keeps showing the previous
+		// release after a deploy.
+		if strings.HasPrefix(p, "_next/static/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		// 1) exact file (assets: _next/*, favicon.ico, ...)
 		// 2) route dir → <p>/index.html (trailingSlash export)
 		// 3) <p>.html

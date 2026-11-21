@@ -47,6 +47,7 @@ import { BroadcastTab } from "./_tabs/broadcast-tab";
 import { CoverageGraphTab } from "./_tabs/coverage-graph-tab";
 import { FindingsTab } from "./_tabs/findings-tab";
 import { GraphTab } from "./_tabs/graph-tab";
+import { CredentialsTab } from "./_tabs/credentials-tab";
 import { InterceptTab } from "./_tabs/intercept-tab";
 import { OverviewTab } from "./_tabs/overview-tab";
 import { ReportTab } from "./_tabs/report-tab";
@@ -62,6 +63,7 @@ const TABS = [
   { value: "retests", get label() { return swt("interface.m0332"); } },
   { value: "assets", get label() { return swt("interface.m0510"); } },
   { value: "coverage", get label() { return swt("interface.m0782"); } },
+  { value: "credentials", label: "Credentials" },
   { value: "intercept", get label() { return swt("interface.m0783"); } },
   { value: "report", get label() { return swt("interface.m0784"); } },
 ];
@@ -447,6 +449,9 @@ function TaskDetailInner() {
         </TabsContent>
         <TabsContent value="coverage" className="mt-0">
           <CoverageGraphTab taskId={id} coverageEnabled={task?.coverage_enabled !== false} />
+        </TabsContent>
+        <TabsContent value="credentials" className="mt-0">
+          <CredentialsTab taskId={id} />
         </TabsContent>
         <TabsContent value="intercept" className="mt-0">
           <InterceptTab taskId={id} />

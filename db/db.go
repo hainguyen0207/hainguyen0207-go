@@ -333,6 +333,41 @@ ON CONFLICT DO NOTHING`, r.kind, r.pattern, r.note); err != nil {
 // that MCP is enabled/configured.
 var builtinSkillVisibility = map[string][]string{
 	"api-recon": {"auto", "pentest", "worker"},
+	// Per-class web testing playbooks + API/code-audit methodology, ported from
+	// ScopeWeaver/bcpen (AGPL-3.0; 12 adapted from AntiFox), adapted to this
+	// platform (report_finding + traffic_search instead of a coverage matrix).
+	"sql-injection-testing":     {"auto", "pentest", "worker"},
+	"xss-testing":               {"auto", "pentest", "worker"},
+	"ssrf-testing":              {"auto", "pentest", "worker"},
+	"xxe-testing":               {"auto", "pentest", "worker"},
+	"command-injection-testing": {"auto", "pentest", "worker"},
+	"deserialization-testing":   {"auto", "pentest", "worker"},
+	"file-upload-testing":       {"auto", "pentest", "worker"},
+	"idor-testing":              {"auto", "pentest", "worker"},
+	"csrf-testing":              {"auto", "pentest", "worker"},
+	"business-logic-testing":    {"auto", "pentest", "worker"},
+	"ldap-injection-testing":    {"auto", "pentest", "worker"},
+	"xpath-injection-testing":   {"auto", "pentest", "worker"},
+	"ssti-testing":              {"auto", "pentest", "worker"},
+	"lfi-testing":               {"auto", "pentest", "worker"},
+	"open-redirect-testing":     {"auto", "pentest", "worker"},
+	"auth-bypass-testing":       {"auto", "pentest", "worker"},
+	"api-security":              {"auto", "pentest", "worker"},
+	"codeaudit":                 {"auto", "pentest", "worker"},
+	// Existing web / bug-bounty skills enabled for the task agents.
+	"bug-bounty-methodology": {"auto", "pentest", "worker"},
+	"web-pentest":            {"auto", "pentest", "worker"},
+	"finding-discipline":     {"auto", "pentest", "worker"},
+	"scope-discipline":       {"auto", "pentest", "worker"},
+	"recon-engine":           {"auto", "pentest", "worker"},
+	"workflow-control":       {"auto", "pentest", "worker"},
+	"recon-first-pentest":    {"auto", "pentest", "worker"},
+	"recon-to-attack":        {"auto", "pentest", "worker"},
+	"recon-osint":            {"auto", "pentest", "worker"},
+	"endpoint-recon":         {"auto", "pentest", "worker"},
+	"cloud-security":         {"auto", "pentest", "worker"},
+	"crypto-analysis":        {"auto", "pentest", "worker"},
+	"ai-security":            {"auto", "pentest", "worker"},
 }
 
 // seedBuiltinSkillVisibility binds the shipped built-in skills to their default

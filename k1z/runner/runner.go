@@ -160,9 +160,26 @@ func (r *Runner) RecoverOrphans() {
 	if err != nil {
 		return
 	}
+	var requeue []string
 	for _, run := range runs {
+		if run.Status == "queued" {
+			// The Go port keeps the work queue IN MEMORY (no broker like the Python
+			// version), so a run still 'queued' from a previous process life would sit
+			// forever. Re-enqueue it (ActiveRuns is ordered by created_at, so FIFO).
+			requeue = append(requeue, run.ID)
+			continue
+		}
 		if run.Status != "running" {
-			continue // queued runs still execute (Python: broker keeps them)
+			continue
+		}
+		// A run left 'running' by an unclean stop/reboot: no process executes it any
+		// more. Auto-RESUME it from its last completed step (same as the API Resume)
+		// so a VM restart doesn't throw away half-done recon. Capped per run (marker
+		// file in the workspace) so a run that itself kills the worker can't loop.
+		if r.autoResumeOrphan(run) {
+			requeue = append(requeue, run.ID)
+			log.Printf("[runner] auto-resuming interrupted run %s from its last completed step", run.ID)
+			continue
 		}
 		msg := "Interrupted by a worker restart — no process was left running this scan. Use Resume to continue from the last completed step."
 		_ = r.St.UpdateRunStatus(run.ID, "failed", map[string]any{
@@ -172,6 +189,50 @@ func (r *Runner) RecoverOrphans() {
 		r.Bus.Publish(run.ID, bus.Message{Type: "done", Status: "failed", Error: msg})
 		log.Printf("[runner] recovered orphaned run %s", run.ID)
 	}
+	for _, id := range requeue {
+		r.Enqueue(id)
+		log.Printf("[runner] re-enqueued queued run %s", id)
+	}
+}
+
+// maxAutoResume caps how many times one run is auto-resumed after a restart.
+const maxAutoResume = 2
+
+// autoResumeOrphan re-arms an orphaned 'running' run for execution from its last
+// completed step: non-terminal steps -> pending, status -> queued, resume=true.
+// Returns false (caller then marks it failed as before) when the run has no
+// workspace on disk or already hit maxAutoResume.
+func (r *Runner) autoResumeOrphan(run *store.Run) bool {
+	if run.Workspace == "" {
+		return false
+	}
+	if _, err := os.Stat(run.Workspace); err != nil {
+		return false
+	}
+	marker := filepath.Join(run.Workspace, ".auto_resume_count")
+	n := 0
+	if b, err := os.ReadFile(marker); err == nil {
+		_, _ = fmt.Sscanf(strings.TrimSpace(string(b)), "%d", &n)
+	}
+	if n >= maxAutoResume {
+		return false
+	}
+	_ = os.WriteFile(marker, []byte(fmt.Sprintf("%d\n", n+1)), 0o644)
+	_ = os.Remove(filepath.Join(run.Workspace, "pause.flag"))
+	var steps []map[string]any
+	_ = json.Unmarshal([]byte(run.StepsJSON), &steps)
+	for _, st := range steps {
+		switch st["status"] {
+		case "paused", "failed", "running":
+			st["status"] = "pending"
+		}
+	}
+	b, _ := json.Marshal(steps)
+	_ = r.St.SetRunStepsJSON(run.ID, string(b))
+	_ = r.St.UpdateRunStatus(run.ID, "queued", map[string]any{
+		"resume": true, "finished_at": nil, "paused_at": nil, "steps_json": string(b),
+	})
+	return true
 }
 
 // ── launch ───────────────────────────────────────────────────────────────────

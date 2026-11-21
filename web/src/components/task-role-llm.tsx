@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { api } from "@/lib/api";
 import type { LLMProfile } from "@/lib/types";
 
-const ROLES: { key: string; label: string; hint: string }[] = [
+export type RoleDef = { key: string; label: string; hint: string };
+
+const ROLES: RoleDef[] = [
   { key: "mainagent", label: "Main agent", hint: "Điều phối chính / chat" },
   { key: "planner", label: "Planner", hint: "Lập kế hoạch, sinh intent" },
   { key: "worker", label: "Worker", hint: "Thực thi từng intent" },
@@ -27,6 +29,10 @@ type Props = {
   /** Controlled mode (e.g. the new-task form, before a task exists). */
   value?: RoleOverrides;
   onChange?: (next: RoleOverrides) => void;
+  /** Roles to show (default: main agent / planner / worker). */
+  roles?: RoleDef[];
+  title?: string;
+  description?: React.ReactNode;
 };
 
 /**
@@ -37,8 +43,8 @@ type Props = {
  * With `taskId` it fetches + auto-saves; with `value`/`onChange` it is a controlled
  * field (used in the new-task form, which applies the overrides after the task is created).
  */
-export function TaskRoleLLM({ profiles, disabled, taskId, value, onChange }: Props) {
-  const labelOf = (role: string) => ROLES.find((r) => r.key === role)?.label ?? role;
+export function TaskRoleLLM({ profiles, disabled, taskId, value, onChange, roles = ROLES, title, description }: Props) {
+  const labelOf = (role: string) => roles.find((r) => r.key === role)?.label ?? role;
   const modelOf = (pid: number | null) =>
     pid == null ? "Mặc định" : (profiles.find((p) => String(p.id) === String(pid))?.name ?? `#${pid}`);
   const selfManaged = Boolean(taskId);
@@ -85,16 +91,20 @@ export function TaskRoleLLM({ profiles, disabled, taskId, value, onChange }: Pro
       <div className="flex items-start gap-2">
         <CpuIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <div className="space-y-0.5">
-          <div className="font-medium text-sm leading-none">Model theo vai trò</div>
+          <div className="font-medium text-sm leading-none">{title ?? "Model theo vai trò"}</div>
           <p className="text-muted-foreground text-xs leading-snug">
-            Mỗi vai trò chạy model riêng. <span className="font-medium">Mặc định</span> = theo chain/global. Ghi đè ưu
-            tiên cao nhất, hiệu lực ở lần gọi LLM kế tiếp.
+            {description ?? (
+              <>
+                Mỗi vai trò chạy model riêng. <span className="font-medium">Mặc định</span> = theo chain/global. Ghi đè
+                ưu tiên cao nhất, hiệu lực ở lần gọi LLM kế tiếp.
+              </>
+            )}
           </p>
         </div>
       </div>
 
       <div className="space-y-1.5">
-        {ROLES.map(({ key, label, hint }) => {
+        {roles.map(({ key, label, hint }) => {
           const selected = current[key];
           const triggerValue = selected ? String(selected) : DEFAULT_VALUE;
           return (
@@ -139,3 +149,10 @@ export function TaskRoleLLM({ profiles, disabled, taskId, value, onChange }: Pro
     </div>
   );
 }
+
+/** The finding-validation agent's per-task model (role "validator"). */
+export const VALIDATOR_ROLES: RoleDef[] = [
+  { key: "validator", label: "Validator", hint: "Agent xác minh + nâng impact finding" },
+];
+export const VALIDATOR_ROLE_DESC =
+  "Model dùng để xác minh finding của task này. Mặc định = model gán cho agent validator (hiện là Sonnet 5.5).";

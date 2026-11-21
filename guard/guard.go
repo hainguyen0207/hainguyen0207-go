@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Autumn-27/artex/intercept"
+	"github.com/Autumn-27/artex/redset"
 	"github.com/Autumn-27/norma/hook"
 )
 
@@ -73,6 +74,39 @@ func (g *Guard) preToolUse(ctx context.Context, ev hook.Event) hook.Result {
 		}
 		_ = json.Unmarshal(ev.Input, &in)
 		cmd = in.Text
+	}
+	// Red-set gate (ported from ScopeWeaver/bcpen, precision-tuned): a recognized
+	// destructive / exfil / DoS / brute-force / persistence / real-world
+	// side-effect command is never run unattended. It goes to the operator
+	// approval queue (same mechanism as an "ask" intercept rule) and the worker
+	// waits; fail-closed: no decision in 10 minutes -> deny, and with no approval
+	// channel it is blocked outright. Hardcoded on purpose (not a deletable DB
+	// rule); orthogonal to scope, which decides WHICH host may be touched.
+	if cmd != "" {
+		if d := redset.Classify(cmd); d.Level == redset.LevelSignoff {
+			reason := "red-set action (" + d.Signal + ": " + d.Reason + ") - requires explicit operator sign-off"
+			if g.interceptor == nil {
+				return g.block(ev.ToolName, systemBlockMessage(reason+"; no approval channel available, not permitted autonomously"), cmd)
+			}
+			if ctx.Err() != nil {
+				return g.block(ev.ToolName, systemBlockMessage("Work was cancelled; platform security controls blocked execution"), cmd)
+			}
+			g.record(ev.ToolName, "ask", reason, cmd)
+			askCtx := intercept.WithCall(ctx, ev.ToolName, ev.Input)
+			dec := intercept.Decision{
+				Action:         "ask",
+				RuleName:       "red-set (" + d.Signal + ")",
+				Message:        reason,
+				TimeoutEnabled: true,
+				TimeoutSeconds: 600,
+				TimeoutAction:  "deny",
+			}
+			if g.interceptor.HandleAsk(askCtx, intercept.ConvIDFromContext(askCtx), dec, ev.ToolName, ev.Input) {
+				g.record(ev.ToolName, "allow", "operator signed off: "+reason, cmd)
+				return hook.Result{}
+			}
+			return g.block(ev.ToolName, systemBlockMessage(reason+"; operator did not approve (denied or timed out)"), cmd)
+		}
 	}
 	g.record(ev.ToolName, "allow", "", cmd)
 	return g.applyIntercept(ctx, ev)

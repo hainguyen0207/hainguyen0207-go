@@ -537,6 +537,39 @@ func (s *Server) runConversationTurn(ctx context.Context, cancel context.CancelC
 			}
 		}
 	}
+	// The finding gate agents (bcpen port) share the retester's first-turn
+	// lifecycle: the opening turn runs the validation; follow-up turns may explain
+	// the sealed verdict, and the result tool refuses to overwrite it.
+	if c.AgentKey == db.FindingValidatorAgentKey || c.AgentKey == db.FindingEscalatorAgentKey {
+		v, err := s.m.pg.FindingValidationForConversation(context.Background(), c.ID)
+		if err != nil {
+			log.Printf("[conv %d] load validation: %v", c.ID, err)
+			if err := s.m.pg.FailPendingValidationForConversation(c.ID, "failed to read validation status; please start it again"); err != nil {
+				log.Printf("[conv %d] seal validation: %v", c.ID, err)
+			}
+			return
+		}
+		if v != nil && v.Status == "pending" {
+			finishStatus, finishReason = "failed", "validation failed to start"
+			defer func() {
+				if ctx.Err() != nil {
+					finishStatus, finishReason = "stopped", "validation stopped or service shut down"
+				}
+				s.finishValidation(v.ID, finishStatus, finishReason)
+			}()
+			if ctx.Err() != nil {
+				return
+			}
+			started, err := s.m.pg.StartFindingValidation(ctx, v.ID)
+			if err != nil {
+				finishReason = err.Error()
+				return
+			}
+			if !started {
+				return
+			}
+		}
+	}
 	if ctx.Err() != nil {
 		return
 	}

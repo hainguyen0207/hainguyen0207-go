@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -88,7 +89,9 @@ func (s *Server) autoPromoteRunAssets(runID string) {
 		return
 	}
 	var r struct {
-		Target string `json:"target"`
+		Target    string `json:"target"`
+		Workflow  string `json:"workflow"`
+		Workspace string `json:"workspace"`
 	}
 	_ = json.Unmarshal(data, &r)
 	target := strings.TrimSpace(strings.ToLower(r.Target))
@@ -106,6 +109,10 @@ func (s *Server) autoPromoteRunAssets(runID string) {
 	// this domain (deep JS extraction + request reconstruction + replay + appraisal),
 	// in the background, so it runs per task/per domain without anyone opening a chat.
 	s.maybeLaunchEndpointAgent(target)
+	// Deterministic vhost chaining: when a DISCOVERY run (02) finishes, auto-kick a
+	// targeted host+vhost scan (05) over its subdomain list so EVERY in-scope root the
+	// agent enumerated gets vhost/port coverage - never left to the model to remember.
+	s.maybeChainVhostScan(ctx, target, r.Workflow, r.Workspace)
 }
 
 // endpointReconLaunched throttles the per-target auto-launch of the endpoint agent so
@@ -135,6 +142,47 @@ func (s *Server) maybeLaunchEndpointAgent(target string) {
 		0, false, "", "",
 	)
 	log.Printf("[endpoint-recon] auto-launched endpoint_recon agent for %s", target)
+}
+
+// vhostChainLaunched throttles the per-target auto-chain of the 05 vhost scan so a
+// root whose discovery (02) finishes repeatedly doesn't spawn duplicate scans.
+// target -> last chain time.
+var vhostChainLaunched sync.Map
+
+// maybeChainVhostScan auto-starts a targeted host+vhost scan (05-scan-hosts) off a
+// finished DISCOVERY run's (02-full-recon) subdomain list. Wired into
+// autoPromoteRunAssets so EVERY in-scope root the agent enumerated gets vhost + port
+// coverage deterministically, instead of depending on the agent to remember to run
+// 05 per root. Guards: only chains off the discovery workflow (so a finished 05 never
+// re-chains 05), requires a non-empty subdomains_all.txt, and throttles per target.
+// Best-effort: logs and swallows errors.
+func (s *Server) maybeChainVhostScan(ctx context.Context, target, workflow, workspace string) {
+	if target == "" || workspace == "" {
+		return
+	}
+	// Only off the discovery workflow - prevents a finished 05 from re-chaining 05.
+	if !strings.EqualFold(strings.TrimSpace(workflow), defaultReconWorkflow) {
+		return
+	}
+	subs := strings.TrimRight(workspace, "/") + "/subdomains_all.txt"
+	if fi, err := os.Stat(subs); err != nil || fi.Size() == 0 {
+		return // nothing discovered -> nothing to vhost-scan
+	}
+	// Throttle per target (15 min) so repeated 02 finishes don't dup the scan.
+	now := time.Now()
+	if v, ok := vhostChainLaunched.Load(target); ok {
+		if last, _ := v.(time.Time); now.Sub(last) < 15*time.Minute {
+			return
+		}
+	}
+	vhostChainLaunched.Store(target, now)
+	run05, err := s.reconStartRun(ctx, target, "05-scan-hosts.yaml",
+		[]string{"subdomains_list=" + subs, "vhost_all_names=true"})
+	if err != nil {
+		log.Printf("[vhost-chain] %s: 05 scan not started: %v", target, err)
+		return
+	}
+	log.Printf("[vhost-chain] auto-chained 05 vhost scan %s for %s (off %s)", run05, target, workflow)
 }
 
 const (

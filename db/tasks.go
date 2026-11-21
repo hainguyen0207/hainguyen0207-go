@@ -51,6 +51,9 @@ type Task struct {
 	// list_untested_assets, and the coverage block is not injected into the situation (the scope field is still kept). Company links
 	// (task_scope kind=company) are independent of this switch and are never affected. See db/task_scope.go.
 	CoverageEnabled bool `json:"coverage_enabled"`
+	// VerifyFindings gates this task's medium+ findings behind the finding validator
+	// before their report is pushed (default true). See server/notifier.go.
+	VerifyFindings bool `json:"verify_findings"`
 }
 
 // TaskDeleteResult reports optional related-data cleanup performed in the same
@@ -156,6 +159,8 @@ type TaskCreateOptions struct {
 	// CoverageEnabled is the switch for the "asset coverage" feature; nil = default on (true), so creation
 	// paths that do not care about the switch (orchestration spawn, old API) keep the original behavior. Only web task creation may explicitly pass false to turn it off.
 	CoverageEnabled *bool
+	// VerifyFindings: nil = default on (true).
+	VerifyFindings *bool
 	// InterceptRules are task-level asset intercept rules, written to task_intercept_rules in the same transaction as the task at creation time.
 	InterceptRules []TaskInterceptRuleInput
 }
@@ -200,6 +205,7 @@ VALUES ($1, 'fact', $2, 0, 'origin', 'system')`, expID, string(originPayload)); 
 	}
 	opts.PlanHeartbeatSeconds = normalizeHeartbeat(opts.PlanHeartbeatSeconds)
 	coverageEnabled := opts.CoverageEnabled == nil || *opts.CoverageEnabled
+	verifyFindings := opts.VerifyFindings == nil || *opts.VerifyFindings
 	var categoryName string
 	if opts.CategoryID != nil {
 		if *opts.CategoryID <= 0 {
@@ -225,12 +231,12 @@ VALUES ($1, 'fact', $2, 0, 'origin', 'system')`, expID, string(originPayload)); 
 		SourceTaskIDs:  append([]int64(nil), opts.SourceTaskIDs...),
 		CompanyIDs:     append([]int64(nil), opts.CompanyIDs...),
 		TimeoutSeconds: opts.TimeoutSeconds, PlanHeartbeatSeconds: opts.PlanHeartbeatSeconds,
-		CoverageEnabled: coverageEnabled,
+		CoverageEnabled: coverageEnabled, VerifyFindings: verifyFindings,
 	}
 	if err := tx.QueryRow(`
-INSERT INTO tasks(name, category_id, description, goal, exploration_id, llm_profile_id, active_llm_profile_id, timeout_seconds, plan_heartbeat_seconds, coverage_enabled)
-VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9)
-RETURNING id, status, paused, created_at`, opts.Name, opts.CategoryID, description, goal, expID, active, opts.TimeoutSeconds, opts.PlanHeartbeatSeconds, coverageEnabled).Scan(&t.ID, &t.Status, &t.Paused, &t.CreatedAt); err != nil {
+INSERT INTO tasks(name, category_id, description, goal, exploration_id, llm_profile_id, active_llm_profile_id, timeout_seconds, plan_heartbeat_seconds, coverage_enabled, verify_findings)
+VALUES ($1,$2,$3,$4,$5,$6,$6,$7,$8,$9,$10)
+RETURNING id, status, paused, created_at`, opts.Name, opts.CategoryID, description, goal, expID, active, opts.TimeoutSeconds, opts.PlanHeartbeatSeconds, coverageEnabled, verifyFindings).Scan(&t.ID, &t.Status, &t.Paused, &t.CreatedAt); err != nil {
 		return nil, err
 	}
 	if err := insertTaskRelations(tx, t.ID, opts.SourceTaskIDs); err != nil {
@@ -346,11 +352,11 @@ func insertTaskLLMProfiles(tx *sql.Tx, taskID int64, profileIDs []int64) error {
 
 const taskCols = `id, COALESCE(name,''), category_id,
 COALESCE((SELECT category.name FROM task_categories category WHERE category.id=tasks.category_id),''),
-description, goal, exploration_id, status, paused, queued, queued_at, COALESCE(queue_mode,''), llm_profile_id, active_llm_profile_id, COALESCE(parent_ref,''), pinned_at, created_at, completed_at, COALESCE(timeout_seconds,0), COALESCE(plan_heartbeat_seconds,300), COALESCE(coverage_enabled,true), first_run_at, deadline_at`
+description, goal, exploration_id, status, paused, queued, queued_at, COALESCE(queue_mode,''), llm_profile_id, active_llm_profile_id, COALESCE(parent_ref,''), pinned_at, created_at, completed_at, COALESCE(timeout_seconds,0), COALESCE(plan_heartbeat_seconds,300), COALESCE(coverage_enabled,true), first_run_at, deadline_at, COALESCE(verify_findings,true)`
 
 func scanTask(sc interface{ Scan(...any) error }) (*Task, error) {
 	var t Task
-	if err := sc.Scan(&t.ID, &t.Name, &t.CategoryID, &t.CategoryName, &t.Description, &t.Goal, &t.ExplorationID, &t.Status, &t.Paused, &t.Queued, &t.QueuedAt, &t.QueueMode, &t.LLMProfileID, &t.ActiveLLMProfileID, &t.ParentRef, &t.PinnedAt, &t.CreatedAt, &t.CompletedAt, &t.TimeoutSeconds, &t.PlanHeartbeatSeconds, &t.CoverageEnabled, &t.FirstRunAt, &t.DeadlineAt); err != nil {
+	if err := sc.Scan(&t.ID, &t.Name, &t.CategoryID, &t.CategoryName, &t.Description, &t.Goal, &t.ExplorationID, &t.Status, &t.Paused, &t.Queued, &t.QueuedAt, &t.QueueMode, &t.LLMProfileID, &t.ActiveLLMProfileID, &t.ParentRef, &t.PinnedAt, &t.CreatedAt, &t.CompletedAt, &t.TimeoutSeconds, &t.PlanHeartbeatSeconds, &t.CoverageEnabled, &t.FirstRunAt, &t.DeadlineAt, &t.VerifyFindings); err != nil {
 		return nil, err
 	}
 	t.Pinned = t.PinnedAt != nil
@@ -653,4 +659,16 @@ DELETE FROM assets a USING deletable d WHERE a.id=d.id`, id, expID)
 		return result, err
 	}
 	return result, tx.Commit()
+}
+
+// SetTaskVerifyFindings toggles a task's finding-validation gate.
+func (d *DB) SetTaskVerifyFindings(id int64, on bool) error {
+	res, err := d.Exec(`UPDATE tasks SET verify_findings=$2 WHERE id=$1`, id, on)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

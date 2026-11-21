@@ -19,7 +19,11 @@ func deferredSystem(sysText string, def DeferredInfo) (system []string, boundary
 	sysText += def.FindingGuidance
 	block := actool.RenderDeferredToolsBlock(def.GlobalNames)
 	if block == "" {
-		return []string{sysText}, 0
+		// The system prompt is fixed for the whole session, so it is always the
+		// cacheable prefix. Returning boundary 0 here (the old behavior) meant NO
+		// cache breakpoint at all: every agent turn re-billed tools+system at full
+		// price (observed cache_read = cache_write = 0 on every call).
+		return []string{sysText}, 1
 	}
 	system = []string{sysText, block}
 	boundary = len(system) // b >= len → whole system prompt cached (SDK guard)

@@ -121,7 +121,7 @@ func (s *Server) resolveTaskRoleLLM(t *Task, agentKey string) (taskLLMResolution
 // validTaskLLMRole reports whether a role string is a per-role override target.
 func validTaskLLMRole(role string) bool {
 	switch role {
-	case "mainagent", "planner", "worker", "goals":
+	case "mainagent", "planner", "worker", "goals", "validator":
 		return true
 	}
 	return false

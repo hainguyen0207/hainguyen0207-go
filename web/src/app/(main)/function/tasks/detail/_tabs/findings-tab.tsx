@@ -11,6 +11,7 @@ import { ArrowDownIcon, ArrowUpIcon, ArrowUpRightIcon, ChevronRightIcon } from "
 import { toast } from "sonner";
 
 import { StatusBadge } from "@/components/status-badge";
+import { VerificationBadge } from "@/components/verification-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -112,6 +113,7 @@ function Row({
         ) : (
           <StatusBadge domain="finding" value={f.status} dot />
         )}
+        <VerificationBadge v={f.verification} className="shrink-0" />
         <span className="hidden shrink-0 text-xs text-muted-foreground md:block">
           {new Date(f.ts).toLocaleString(getIntlLocale())}
         </span>

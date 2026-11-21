@@ -546,6 +546,10 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS queued BOOLEAN NOT NULL DEFAULT false
 -- 给 agent 开放 add_task_scope/list_untested_assets;false=全部关闭(见 task_scope.go)。
 -- 存量任务默认 true 保持原行为;company 关联(task_scope kind=company)不受此开关影响。
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS coverage_enabled BOOLEAN NOT NULL DEFAULT true;
+-- verify_findings: run the finding validator on this task's medium+ findings and push
+-- their report to Telegram only once verified (true, default; existing tasks keep the
+-- validation-gated behavior). false = push the report as soon as it is written.
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS verify_findings BOOLEAN NOT NULL DEFAULT true;
 -- queued_at makes admission FIFO reflect the actual enqueue order rather than the
 -- task creation order. queue_mode distinguishes first bootstrap from resuming an
 -- exploration that already owns goals/history.
@@ -716,13 +720,17 @@ CREATE INDEX IF NOT EXISTS idx_task_llm_profiles_profile ON task_llm_profiles(pr
 -- drops the override (role falls back to the chain/binding/global).
 CREATE TABLE IF NOT EXISTS task_role_llm (
     task_id          BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    role             TEXT NOT NULL CHECK (role IN ('mainagent','planner','worker','goals')),
+    role             TEXT NOT NULL CHECK (role IN ('mainagent','planner','worker','goals','validator')),
     profile_id       BIGINT NOT NULL REFERENCES llm_profiles(id) ON DELETE CASCADE,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (task_id, role)
 );
 CREATE INDEX IF NOT EXISTS idx_task_role_llm_profile ON task_role_llm(profile_id);
+-- Allow the 'validator' role (per-task model for the finding validator/escalator).
+-- Rebuilt idempotently: the inline CHECK above predates the role.
+ALTER TABLE task_role_llm DROP CONSTRAINT IF EXISTS task_role_llm_role_check;
+ALTER TABLE task_role_llm ADD CONSTRAINT task_role_llm_role_check CHECK (role IN ('mainagent','planner','worker','goals','validator'));
 CREATE INDEX IF NOT EXISTS idx_tasks_llm_profile ON tasks(llm_profile_id) WHERE llm_profile_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_tasks_active_llm_profile ON tasks(active_llm_profile_id) WHERE active_llm_profile_id IS NOT NULL;
 DROP TRIGGER IF EXISTS trg_task_llm_profiles_upd ON task_llm_profiles;
@@ -1399,3 +1407,55 @@ CREATE INDEX IF NOT EXISTS idx_notification_deliveries_batch
     ON notification_deliveries(batch_id) WHERE batch_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_notification_deliveries_channel
     ON notification_deliveries(channel_id, id DESC);
+-- task_credentials (bcpen, restored): per-task test accounts the operator or the
+-- agent records for a target domain, so authenticated flows are reproducible.
+-- Carried over from the ARTEX base; ScopeWeaver pruned it.
+CREATE TABLE IF NOT EXISTS task_credentials (
+    id         BIGSERIAL PRIMARY KEY,
+    task_id    BIGINT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    domain     TEXT NOT NULL,
+    username   TEXT NOT NULL,
+    password   TEXT NOT NULL DEFAULT '',
+    source     TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user','agent')),
+    note       TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (task_id, domain, username)
+);
+CREATE INDEX IF NOT EXISTS idx_task_credentials_task ON task_credentials (task_id);
+
+-- finding_validations: the pre-report finding gate (bcpen). One row per validation
+-- round for a finding. Two opposing stages run against the same finding — the
+-- 'validator' (default disbelief: the false-positive firewall) and, only when the
+-- validator returns 'escalate', the 'escalator' (default belief: push the primitive
+-- to real impact). Mirrors finding_retests, but its verdict gates REPORT ELIGIBILITY
+-- (only a 'passed' validation admits a finding to the deliverable), where retests
+-- gate post-fix remediation. See package validation.
+CREATE TABLE IF NOT EXISTS finding_validations (
+    id BIGSERIAL PRIMARY KEY,
+    finding_id BIGINT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+    stage TEXT NOT NULL DEFAULT 'validator' CHECK (stage IN ('validator','escalator')),
+    conversation_id BIGINT UNIQUE REFERENCES conversations(id) ON DELETE SET NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','completed','failed','stopped')),
+    verdict TEXT NOT NULL DEFAULT '' CHECK (verdict IN ('','passed','rejected','escalate')),
+    -- tier gate (severity_triage): a 'passed' verdict must be tier='finding'. A
+    -- gadget/lead/note cannot be laundered into the report. Empty until recorded.
+    tier TEXT NOT NULL DEFAULT '' CHECK (tier IN ('','note','lead','gadget','finding')),
+    severity_confirmed TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    snapshot JSONB NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    evidence TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_finding_validations_finding ON finding_validations (finding_id, id DESC);
+-- finding_report_retries: how many times the report sweeper re-ran the reporter for a
+-- finding whose report was never written (bounded retries, then summary-only push).
+CREATE TABLE IF NOT EXISTS finding_report_retries (
+    finding_id BIGINT PRIMARY KEY REFERENCES findings(id) ON DELETE CASCADE,
+    attempts   INT NOT NULL DEFAULT 0,
+    last_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
